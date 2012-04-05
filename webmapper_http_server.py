@@ -279,13 +279,29 @@ def handler_page(out, args):
 <script type="text/javascript" src="js/jquery-ui.min.js"></script>
 <script type="text/javascript" src="js/util.js"></script>
 <script type="text/javascript" src="js/json2.js"></script>
+<script type="text/javascript" src="js/d3.v2.min.js"></script>
 <script type="text/javascript" src="js/command.js"></script>
 <script type="text/javascript" src="js/main.js"></script>
-<link rel="stylesheet" type="text/css" href="css/style.css"></link>
+<style type="text/css">
+.node circle {
+  fill: #fff;
+  stroke: steelblue;
+  stroke-width: 1.5px;
+}
+
+.node {
+  font: 10px sans-serif;
+}
+
+.link {
+  fill: none;
+  stroke: #ccc;
+  stroke-width: 1.5px;
+}
+</style>
 </head>
 <body>
-<table id="spacerTable"><tr><td></td><td></td><td></td></tr></table>
-<div id="output"></div>
+<div class "gallery" id="chart"></div>
 </body>
 </html>"""
 
