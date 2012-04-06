@@ -289,8 +289,8 @@ def handler_page(out, args):
   stroke-width: 1.5px;
 }
 
-.node {
-  font: 10px sans-serif;
+.node text {
+  font-size: 11px;
 }
 
 .link {
