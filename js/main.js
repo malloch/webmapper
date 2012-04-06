@@ -1,35 +1,27 @@
-var mapping =   {
-                    "name" : "mapping",
-                    "children" : [
-                        { "name" : "devices", "children" : [] },
-                        { "name" : "signals", "children" : [] },
-                        { "name" : "links", "children" : [] },
-                        { "name" : "connections", "children" : [] }
-                    ]
+var devices =   {
+                    "name" : "devices",
+                    "children" : []
                 };
 
 var cluster;
 var diagonal;
 var vis;
-var nodes;
-var link;
-var node;
+var w = 960;
+var h = 1000;
+var i = 0;
 
 function setup_display()
 {
-    var w = 960;
-    var h = 1000;
-
     cluster = d3.layout.cluster()
         .size([h, w - 160]);
 
     diagonal = d3.svg.diagonal()
         .projection(function(d) { return [d.y, d.x]; });
 
-    vis = d3.select("#chart").append("svg")
+    vis = d3.select("#chart").append("svg:svg")
         .attr("width", w)
         .attr("height", h)
-      .append("g")
+      .append("svg:g")
         .attr("transform", "translate(50, 0)");
 
     update_display();
@@ -37,43 +29,65 @@ function setup_display()
 
 function update_display()
 {
-    nodes = cluster.nodes(mapping.children[0]);
+    var nodes = cluster.nodes(devices).reverse();
 
-    link = vis.selectAll("path.link")
-        .data(cluster.links(nodes))
-      .enter().append("path")
-        .attr("class", "link")
-        .attr("d", diagonal);
+    var node = vis.selectAll("g.node")
+        .data(nodes, function(d) { return d.id || (d.id = ++i); });
 
-    node = vis.selectAll("g.node")
-        .data(nodes)
-      .enter().append("g")
+    var nodeEnter = node.enter().append("svg:g")
         .attr("class", "node")
         .attr("transform", function(d) { return "translate(" + d.y + "," + d.x + ")"; });
 
-    node.append("circle")
+    nodeEnter.append("circle")
         .attr("r", 4.5);
 
-    node.append("text")
+    nodeEnter.append("text")
         .attr("dx", function(d) { return d.children ? -8 : 8; })
         .attr("dy", 3)
         .attr("text-anchor", function(d) { return d.children ? "end" : "start"; })
-    .text(function(d) { return d.name; });
+        .text(function(d) { return d.name; });
+
+    var nodeUpdate = node.transition()
+        .duration(1000)
+        .attr("transform", function(d) { return "translate(" + d.y + "," + d.x + ")"; });
+
+    var NodeExit = node.exit().remove();
+
+    var link = vis.selectAll("path.link")
+        .data(cluster.links(nodes), function(d) { return d.target.id; });
+
+    link.enter().append("svg:path", "g")
+        .attr("class", "link")
+        .attr("d", diagonal);
+
+    link.transition()
+        .duration(1000)
+        .attr("d", diagonal);
+
+    link.exit().remove();
 }
 
 /* The main program. */
 function main()
 {
     command.register("all_devices", function(cmd, args) {
-        var length = mapping.children[0].children.length;
-        for (d in args)
-            mapping.children[0].children[length++] = { "name" : args[d].name };
+        for (d in args) {
+            for (i in devices.children) {
+                if (devices.children[i].name == args[d].name)
+                    return;
+            }
+            devices.children.push({ "name" : args[d].name,
+                                    "children" : [] });
+        }
         update_display();
     });
     command.register("new_device", function(cmd, args) {
-        var length = mapping.children[0].children.length;
-        mapping.children[0].children[length] = { "name" : args.name };
-        mapping.children[0].children[length].foo = 0;
+        for (i in devices.children) {
+                if (devices.children[i].name == args.name)
+                    return;
+        }
+        devices.children.push({ "name" : args.name,
+                                "children" : [] });
         update_display();
     });
     command.register("del_device", function(cmd, args) {
@@ -82,58 +96,73 @@ function main()
     });
 
     command.register("all_signals", function(cmd, args) {
-        var length = mapping.children[1].children.length;
-        for (d in args)
-            mapping.children[1].children[length++] = { "name" : args[d].name };
+        // find device
+        for (d in args) {
+            var index = -1;
+            for (i in devices.children) {
+                if (devices.children[i].name == args[d].device_name) {
+                    devices.children[i].children.push({ "name" : args[d].name,
+                                                        "props" : 0 });
+                    break;
+                }
+            }
+        }
         update_display();
     });
     command.register("new_signal", function(cmd, args) {
-        var length = mapping.children[1].children.length;
-        mapping.children[1].children[length] = { "name" : args.name };
-        update_display();
+        // find device
+        var index = -1;
+        for (i in mapping.children[0].children) {
+            if (devices.children[i].name == args.device_name) {
+                devices.children[i].children.push({ "name" : args.name,
+                                                    "props" : 0 });
+                update_display();
+                return;
+            }
+        }
     });
-    command.register("del_signal", function(cmd, args) {
+//    command.register("del_signal", function(cmd, args) {
 //        mapping.children[1].remove(args.device_name+args.name
 //                       +'/_dir_'+args.direction);
 //        update_display();
-    });
+//    });
 
-    command.register("all_links", function(cmd, args) {
-        var length = mapping.children[2].children.length;
+/*    command.register("all_links", function(cmd, args) {
+        var length = mapping.children[1].children.length;
         for (l in args)
-            mapping.children[2].children[length] = { "name" : args[l].src_name+'>'+args[l].dest_name };
+            mapping.children[1].children[length] = { "name" : args[l].src_name+'>'+args[l].dest_name };
         update_display();
     });
     command.register("new_link", function(cmd, args) {
+        var length = mapping.children[1].children.length;
+        mapping.children[1].children[length] = { "name" : args.src_name+'>'+args.dest_name };
+        update_display();
+    });
+    command.register("del_link", function(cmd, args) {
+        mapping.children[2].remove(args.src_name+'>'+args.dest_name);
+        update_display();
+    });
+
+    command.register("all_connections", function(cmd, args) {
+        var length = mapping.children[2].children.length;
+        for (d in args)
+            mapping.children[2].children[length] = { "name" : args[d].src_name+'>'+args[d].dest_name };
+        update_display();
+    });
+    command.register("new_connection", function(cmd, args) {
         var length = mapping.children[2].children.length;
         mapping.children[2].children[length] = { "name" : args.src_name+'>'+args.dest_name };
         update_display();
     });
-    command.register("del_link", function(cmd, args) {
-//        mapping.children[2].remove(args.src_name+'>'+args.dest_name);
-//        update_display();
-    });
-
-    command.register("all_connections", function(cmd, args) {
-        var length = mapping.children[3].children.length;
-        for (d in args)
-            mapping.children[3].children[length] = { "name" : args[d].src_name+'>'+args[d].dest_name };
-        update_display();
-    });
-    command.register("new_connection", function(cmd, args) {
-        var length = mapping.children[3].children.length;
-        mapping.children[3].children[length] = { "name" : args.src_name+'>'+args.dest_name };
-        update_display();
-    });
     command.register("mod_connection", function(cmd, args) {
-//        mapping.children[3].add(args.src_name+'>'+args.dest_name, args);
-//        update_display();
+        mapping.children[3].add(args.src_name+'>'+args.dest_name, args);
+        update_display();
     });
     command.register("del_connection", function(cmd, args) {
-//        mapping.children[3].remove(args.src_name+'>'+args.dest_name);
-//        update_display();
+        mapping.children[3].remove(args.src_name+'>'+args.dest_name);
+        update_display();
     });
-
+*/
     // Delay starting polling, because it results in a spinning wait
     // cursor in the browser.
     setTimeout(
