@@ -5,28 +5,34 @@ var devices =   {
 
 var devices2 = new Assoc();
 
-var cluster;
-var diagonal;
+var partition;
+var arc;
 var vis;
-var w = 960;
-var h = 1000;
-var r = 1000 / 2;
+var w = 960,
+    h = 960,
+    r = Math.min(w, h) / 2,
+    color = d3.scale.category20c();
 var i = 0;
 var timer_is_on = 0;
 
 function setup_display()
 {
-    cluster = d3.layout.cluster()
-        .size([360, r - 120]);
+    partition = d3.layout.partition()
+        .sort(null)
+        .size([2 * Math.PI, r * r])
+        .value(function(d) { return 1; });
 
-    diagonal = d3.svg.diagonal.radial()
-        .projection(function(d) { return [d.y, d.x / 180 * Math.PI]; });
+    arc = d3.svg.arc()
+        .startAngle(function(d) { return d.x })
+        .endAngle(function(d) { return d.x + d.dx; })
+        .innerRadius(function(d) { return Math.sqrt(d.y); })
+        .outerRadius(function(d) { return Math.sqrt(d.y + d.dy); });
 
-    vis = d3.select("#chart").append("svg:svg")
+    vis = d3.select("#chart").append("svg")
         .attr("width", w)
         .attr("height", h)
-      .append("svg:g")
-        .attr("transform", "translate(" + r + "," + r + ")");
+      .append("g")
+        .attr("transform", "translate(" + w/2 + "," + h/2 + ")");
 
     update_display();
 }
@@ -41,11 +47,11 @@ function update_display()
 
 function real_update_display()
 {
-    var nodes = cluster.nodes(devices).reverse();
+    var nodes = partition.nodes(devices);
 
-    nodes.forEach(function(d) { d.y = d.depth * 180; });
+    //nodes.forEach(function(d) { d.y = d.depth * 180; });
 
-    var link = vis.selectAll("path.link")
+/*    var link = vis.selectAll("path.link")
         .data(cluster.links(nodes), function(d) { return d.target.id; });
 
     link.enter().append("svg:path", "g")
@@ -56,52 +62,76 @@ function real_update_display()
         .attr("d", diagonal);
 
     link.exit().transition()
-        .remove();
+        .remove();*/
 
-    var node = vis.selectAll("g.node")
-        .data(nodes, function(d) { return d.id || (d.id = ++i); });
+    var path = vis.selectAll("path")
+        .data(nodes);
 
-    var nodeEnter = node.enter().append("svg:g")
-        .attr("class", "node")
-        .attr("transform", function(d) { return "rotate(" + (d.x - 90) + ")translate(" + d.y + ")"; });
+    var pathEnter = path.enter().append("path")
+        .attr("display", function(d) { return d.depth ? null : "none"; })
+        .attr("d", arc)
+        .attr("fill-rule", "evenodd")
+        .style("stroke", "#fff")
+        .style("fill", function(d) { return color((d.children ? d : d.parent).name); })
+        .each(stash);
 
-    nodeEnter.append("circle")
+    /*nodeEnter.append("circle")
         .attr("r", 1e-6)
-        .style("fill", function(d) { return d.children ? "lightsteelblue" : "#fff"; });
+        .style("fill", function(d) { return d.children ? "lightsteelblue" : "#fff"; });*/
 
-    nodeEnter.append("text")
+    pathEnter.append("text")
+        .attr("transform", function(d) { "translate(100,100)"; })
+        .text(function(d) { return d.name; });
+        /*
         .attr("x", function(d) { return d.x < 180 ? 10 : -10; })
         .attr("dy", ".35em")
         .attr("text-anchor", function(d) { return d.x < 180 ? "start" : "end"; })
         .attr("transform", function(d) { return d.x < 180 ? null : "rotate(180)" })
         .text(function(d) { return d.name; })
-        .style("fill-opacity", 1e-6);
+        .style("fill-opacity", 1e-6);*/
 
-    var nodeUpdate = node.transition()
-        .attr("transform", function(d) { return "rotate(" + (d.x - 90) + ")translate(" + d.y + ")"; });
+    var pathUpdate = path.transition()
+        .attr("display", function(d) { return d.depth ? null : "none"; })
+        .attr("d", arc)
+        .attr("fill-rule", "evenodd")
+        .style("stroke", "#fff")
+        .style("fill", function(d) { return color((d.children ? d : d.parent).name); })
+        .style("fill-opacity", 0.5)
+        .each(stash);
 
-    nodeUpdate.select("circle")
+    /*nodeUpdate.select("circle")
         .attr("r", 4.5)
-        .style("fill", function(d) { return d.children ? "lightsteelblue" : "#fff"; });
+        .style("fill", function(d) { return d.children ? "lightsteelblue" : "#fff"; });*/
 
-    nodeUpdate.select("text")
+    pathUpdate.select("text")
+        .attr("x", 100)
+        .attr("dy", ".35em")
+        .attr("transform", function(d) { "translate(100,100)"; })
+        .text(function(d) { return d.name; });
+        /*
         .attr("x", function(d) { return d.x < 180 ? 10 : -10; })
         .attr("dy", ".35em")
         .attr("text-anchor", function(d) { return d.x < 180 ? "start" : "end"; })
         .attr("transform", function(d) { return d.x < 180 ? null : "rotate(180)" })
         .text(function(d) { return d.name; })
-        .style("fill-opacity", 1);
+        .style("fill-opacity", 1);*/
 
-    var nodeExit = node.exit().transition()
+    var pathExit = path.exit().transition()
         .remove();
 
-    nodeExit.select("circle")
+    /*nodeExit.select("circle")
         .attr("r", 1e-6);
 
     nodeExit.select("text")
-        .style("fill-opacity", 1e-6);
+        .style("fill-opacity", 1e-6);*/
 
     timer_is_on = 0;
+}
+
+// Stash the old values for transition.
+function stash(d) {
+  d.x0 = d.x;
+  d.dx0 = d.dx;
 }
 
 /* The main program. */
