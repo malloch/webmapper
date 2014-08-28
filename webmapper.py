@@ -40,7 +40,7 @@ def open_gui(port):
     launcher = threading.Thread(target=launch)
     launcher.start()
 
-monitor = mapper.monitor(autosubscribe_flags=mapper.SUB_DEVICE | mapper.SUB_DEVICE_LINKS_OUT)
+monitor = mapper.monitor(autosubscribe_flags=mapper.SUB_DEVICE | mapper.SUB_DEVICE_LINKS)
 
 def on_device(dev, action):
     if action == mapper.MDB_NEW:
@@ -139,7 +139,7 @@ def on_refresh(arg):
     global monitor
     del monitor
     admin = mapper.admin(networkInterfaces['active'])
-    monitor = mapper.monitor(admin, autosubscribe_flags=mapper.SUB_DEVICE | mapper.SUB_DEVICE_LINKS_OUT)
+    monitor = mapper.monitor(admin, autosubscribe_flags=mapper.SUB_DEVICE | mapper.SUB_DEVICE_LINKS)
     init_monitor()
 
 def on_save(arg):
@@ -191,7 +191,7 @@ def select_tab(src_dev):
     # TODO:
     # if src_dev != focus_dev and focus_dev != "All Devices":
     #     # revert device subscription back to only device and link metadata
-    #     monitor.subscribe(focus_dev, mapper.SUB_DEVICE | mapper.SUB_DEVICE_LINKS_OUT, -1)
+    #     monitor.subscribe(focus_dev, mapper.SUB_DEVICE | mapper.SUB_DEVICE_LINKS, -1)
     if src_dev != "All Devices":
         monitor.subscribe(src_dev, mapper.SUB_DEVICE_OUTPUTS | mapper.SUB_DEVICE_CONNECTIONS_OUT, -1)
         links = monitor.db.links_by_src_device_name(src_dev)
