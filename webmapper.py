@@ -77,7 +77,6 @@ def on_connection(con, action):
 def set_connection(con):
     if con.has_key('mode'):
         con['mode'] = {'bypass': mapper.MO_BYPASS,
-                       'reverse': mapper.MO_REVERSE,
                        'linear': mapper.MO_LINEAR,
                        'calibrate': mapper.MO_CALIBRATE,
                        'expression': mapper.MO_EXPRESSION}[con['mode']]
@@ -187,14 +186,14 @@ server.add_command_handler("all_devices",
                            lambda x: ("all_devices",
                                       list(monitor.db.all_devices())))
 
-def select_tab(src_dev):
+def select_tab(dev):
     # TODO:
     # if src_dev != focus_dev and focus_dev != "All Devices":
     #     # revert device subscription back to only device and link metadata
     #     monitor.subscribe(focus_dev, mapper.SUB_DEVICE | mapper.SUB_DEVICE_LINKS, -1)
-    if src_dev != "All Devices":
-        monitor.subscribe(src_dev, mapper.SUB_DEVICE_OUTPUTS | mapper.SUB_DEVICE_CONNECTIONS_OUT, -1)
-        links = monitor.db.links_by_src_device_name(src_dev)
+    if dev != "All Devices":
+        monitor.subscribe(dev, mapper.SUB_DEVICE_OUTPUTS | mapper.SUB_DEVICE_CONNECTIONS_OUT, -1)
+        links = monitor.db.links_by_device_name(dev)
         for i in links:
             monitor.subscribe(i["dest_name"], mapper.SUB_DEVICE_INPUTS, -1)
 
