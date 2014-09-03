@@ -3,6 +3,7 @@ function LibMapperModel() {
     this.signals = new Assoc();
     this.links = new Assoc();
     this.connections = new Assoc();
+    this.selectedLinks = new Assoc();
     this.selectedConnections = new Assoc();
 
     this.networkInterfaces = {'selected': null, 'available': []};
@@ -21,7 +22,7 @@ LibMapperModel.prototype = {
         return result;
     },
 
-    selectedConnections_addConnection : function(src, dst) {
+    selectedConnections_toggleConnection : function(src, dst) {
         // no polymorphism in JS... arrg!
         // called with no 'dst' if the full key is passed in src
         var key = src;
@@ -32,9 +33,12 @@ LibMapperModel.prototype = {
         if (conn) {
             if (!this.selectedConnections.get(key)) {
                 this.selectedConnections.add(key, conn);
-                console.log(this.selectedConnections.keys());
+                return 1;
             }
+            else
+                this.selectedConnections.remove(key);
         }
+        return 0;
     },
 
     selectedConnections_removeConnection : function(src, dst) {
@@ -56,12 +60,34 @@ LibMapperModel.prototype = {
 
     selectedConnections_clearAll : function() {
         this.selectedConnections = new Assoc();
-        console.log(this.selectedConnections.keys());
     },
 
     getConnection : function(src, dst) {
         var key = src + ">" + dst;
         return this.connections.get(key);
+    },
+
+    selectedLinks_toggleLink : function(src, dst) {
+        // no polymorphism in JS... arrg!
+        // called with no 'dst' if the full key is passed in src
+        var key = src;
+        if (dst != null)
+            key += ">" + dst;
+
+        var link = this.links.get(key);
+        if (link) {
+            if (!this.selectedLinks.get(key)) {
+                this.selectedLinks.add(key, link);
+                return 1;
+            }
+            else
+                this.selectedLinks.remove(key);
+        }
+        return 0;
+    },
+
+    selectedLinks_clearAll : function() {
+        this.selectedLinks = new Assoc();
     },
 
     isConnected : function(src, dst) {

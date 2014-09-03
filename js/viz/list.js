@@ -67,7 +67,6 @@ function listView(model) {
             update_signals(selectedTab);
         }
 
-        update_selection();
         filter_view();
         // update_row_heights();
 
@@ -82,21 +81,6 @@ function listView(model) {
         else {
             return '/save?dev='+encodeURIComponent(selectedTab);
         }
-    };
-
-    this.get_selected_connections = function() {
-        var selected = get_selected_rows();
-        var keys = model.connections.keys();
-        var vals = [];
-
-        for (var k in keys) {
-            var c = model.connections.get(keys[k]);
-            // check if src_name and dest_name are selected
-            if (   selected.indexOf(c.src_name) >= 0
-                && selected.indexOf(c.dest_name) >= 0)
-                vals.push(c);
-        }
-        return vals;
     };
 
     this.get_selected_tab = function() {
@@ -319,29 +303,6 @@ function listView(model) {
         }
     }
 
-    function update_selection() {
-        var l = selectLists[selectedTab];
-        if (!l) return;
-
-        function checksel(table, i) {
-            if (!selectLists[selectedTab])
-                return;
-            var l = selectLists[selectedTab][i];
-            if (!l) return;
-            var tr = $(table).children('tbody').children('tr')[0];
-            while (tr && tr.firstChild) {
-                if (l.get(tr.firstChild.innerHTML.replace(/<wbr>/g, '')))
-                    $(tr).addClass("trsel");
-                else
-                    $(tr).removeClass("trsel");
-                tr = tr.nextSibling;
-            }
-        }
-
-        checksel(leftTable.table, 0);
-        checksel(rightTable.table, 1);
-    }
-
     function cleanup_arrows() {
         for (var a in arrows) {
             arrows[a].border.remove();
@@ -361,6 +322,7 @@ function listView(model) {
             var l = model.links.get(keys[k]);
             var src_found = 0;
             var dest_found = 0;
+            var sel = 0;
 
             for (var i = 0, row; row = leftTable.table.rows[i]; i++) {
                 if (row.cells[0].textContent == l.src_name) {
@@ -389,13 +351,17 @@ function listView(model) {
                 }
             }
             if (src_found && dest_found) {
-                var srcsel = $(src).hasClass('trsel');
-                var destsel = $(dest).hasClass('trsel');
+                if (selectedTab == all_devices) {
+                    if (model.selectedLinks.get(keys[k]))
+                        sel = 1;
+                }
+                else if (model.selectedConnections.get(keys[k]))
+                    sel = 1;
                 // Are these rows being displayed?
                 if ($(src).css('display') != 'none'
                     && $(dest).css('display') != 'none') {
                     create_arrow(src, dest, src_found | (dest_found << 2),
-                                 srcsel && destsel, 0);
+                                 sel, 0);
                     n_visibleLinks++;
                 }
             }
@@ -441,6 +407,7 @@ function listView(model) {
             var muted = c.muted;
             var src_found = 0;
             var dest_found = 0;
+            var sel = 0;
 
             for (var i = 0, row; row = leftTable.table.rows[i]; i++) {
                 if (row.cells[0].textContent == c.src_name) {
@@ -469,13 +436,17 @@ function listView(model) {
                 }
             }
             if (src_found && dest_found) {
-                var srcsel = $(src).hasClass('trsel');
-                var destsel = $(dest).hasClass('trsel');
+                if (selectedTab == all_devices) {
+                    if (model.selectedLinks.get(keys[k]))
+                        sel = 1;
+                }
+                else if (model.selectedConnections.get(keys[k]))
+                    sel = 1;
                 // Are these rows being displayed?
                 if ($(src).css('display') != 'none'
                     && $(dest).css('display') != 'none') {
                     create_arrow(src, dest, src_found | (dest_found << 2),
-                                 srcsel && destsel, c.muted);
+                                 sel, c.muted);
                     n_visibleConnections++;
                 }
                 n_connections++;
@@ -625,31 +596,22 @@ function listView(model) {
 
         // TODO move this with all the other UI handlers
         $(line.border.node).on('click', function(e) {
-
             var _src = $(src).children('.name').text();
             var _dst = $(dest).children('.name').text();
 
-
-            // So that the arrow is deselected if both rows are selected
-            // selected, so deselect it
-            if ($(src).hasClass('trsel') && $(dest).hasClass('trsel')) {
-                select_tr(src);
-                select_tr(dest);
-                line.node.classList.remove('selected');
-                if (selectedTab != all_devices)
-                    model.selectedConnections_removeConnection(_src, _dst);
+            if (selectedTab == all_devices) {
+                if (e.shiftKey == false)
+                    model.selectedLinks_clearAll();
+                if (model.selectedLinks_toggleLink(_src, _dst))
+                    update_arrows();
             }
-
-            // not selected, so select it
             else {
-                if (! $(src).hasClass('trsel'))
-                    select_tr(src);
-                if (! $(dest).hasClass('trsel'))
-                    select_tr(dest);
-                line.node.classList.add('selected');
-                if (selectedTab != all_devices)
-                    model.selectedConnections_addConnection(_src, _dst);
+                if (e.shiftKey == false)
+                    model.selectedConnections_clearAll();
+                if (model.selectedConnections_toggleConnection(_src, _dst))
+                    update_arrows();
             }
+
             $('#container').trigger("updateConnectionProperties");
 
             e.stopPropagation();
@@ -752,6 +714,7 @@ function listView(model) {
         lastSelectedTr.left = null;
         lastSelectedTr.right = null;
         update_arrows();
+        model.selectedLinks_clearAll();
         model.selectedConnections_clearAll();
         $('#container').trigger("updateConnectionProperties");
     }
@@ -766,7 +729,15 @@ function listView(model) {
                 select_tr(arrows[i].srcTr);
             if (! $(arrows[i].destTr).hasClass('trsel'))
                 select_tr(arrows[i].destTr);
+
+            var _src = arrows[i].srcTr.cells[0].textContent;
+            var _dst = arrows[i].destTr.cells[0].textContent;
+            if (selectedTab == all_devices)
+                model.selectedLinks_toggleLink(_src, _dst);
+            else
+                model.selectedConnections_toggleConnection(_src, _dst);
         }
+        update_arrows();
     }
 
     function on_table_scroll() {
@@ -778,77 +749,22 @@ function listView(model) {
             update_connections();
     }
 
-    function apply_selected(f) {
-        $('tr.trsel', leftTable.table).each(
-        function(i, e) {
-            var left = e;
-            $('tr.trsel', rightTable.table).each(
-                function(i, e) {
-                    var right = e;
-                    f(left, right);
-                });
-        });
-    }
-
-    function apply_selected_pairs(f, list) {
-        var L = $('.trsel', leftTable.table);
-        var R = $('.trsel', rightTable.table);
-
-        L.map(function() {
-            var left = this;
-            R.map(function() {
-                var right = this;
-                var key = left.firstChild.innerHTML.replace(/<wbr>/g, '')+'>'+right.firstChild.innerHTML.replace(/<wbr>/g, '');
-                var v = list.get(key);
-                if (v) {
-                    f(left, right);
-                }
-            });
-        });
-    }
-
-    function on_link(e) {
-        function do_link(l, r) {
-            $('#container').trigger("link", [l.firstChild.innerHTML, r.firstChild.innerHTML]);
-        }
-        apply_selected(do_link);
-        e.stopPropagation();
-    }
-
-    function on_link_mouseup(e, start, end) {
+    function on_link(e, start, end) {
         $('#container').trigger("link", [start.cells[0].textContent,
                                          end.cells[0].textContent]);
         e.stopPropagation();
     }
 
     function on_unlink(e) {
-        var selected = get_selected_rows();
-        var keys = model.links.keys();
-
+        var keys = model.selectedLinks.keys();
         for (var k in keys) {
-            var l = model.links.get(keys[k]);
-            // check if src_name and dest_name are selected
-            if (   selected.indexOf(l.src_name) >= 0
-                && selected.indexOf(l.dest_name) >= 0)
-                $('#container').trigger("unlink", [l.src_name, l.dest_name]);
+            var l = model.selectedLinks.get(keys[k]);
+            $('#container').trigger("unlink", [l.src_name, l.dest_name]);
         }
         e.stopPropagation();
     }
 
-    function on_connect(e, args) {
-        if (model.mKey) {
-            args['muted'] = true;
-        }
-        function do_connect(l, r) {
-            var sig1 = l.firstChild.innerHTML.replace(/<wbr>/g, '');
-            var sig2 = r.firstChild.innerHTML.replace(/<wbr>/g, '');
-            $('#container').trigger("connect", [sig1, sig2, args]);
-        }
-        apply_selected(do_connect);
-        e.stopPropagation();
-    }
-
-    function on_connect_mouseup(e, start, end, args) {
+    function on_connect(e, start, end, args) {
         if (model.mKey) {
             args['muted'] = true;
         }
@@ -857,33 +773,11 @@ function listView(model) {
         e.stopPropagation();
     }
 
-    function get_selected_rows() {
-        var list = $('.trsel', leftTable.table);
-        var vals = [];
-
-        list.map(function() {
-             var v = this.firstChild.innerHTML.replace(/<wbr>/g, '');
-             vals.push(v);
-        });
-
-        list = $('.trsel', rightTable.table);
-        list.map(function() {
-             var v = this.firstChild.innerHTML.replace(/<wbr>/g, '');
-             vals.push(v);
-        });
-        return vals;
-    }
-
     function on_disconnect(e) {
-        var selected = get_selected_rows();
-        var keys = model.connections.keys();
-
+        var keys = model.selectedConnections.keys();
         for (var k in keys) {
-            var c = model.connections.get(keys[k]);
-            // check if src_name and dest_name are selected
-            if (   selected.indexOf(c.src_name) >= 0
-                && selected.indexOf(c.dest_name) >= 0)
-                $('#container').trigger("disconnect", [c.src_name, c.dest_name]);
+            var c = model.selectedConnections.get(keys[k]);
+            $('#container').trigger("disconnect", [c.src_name, c.dest_name]);
         }
         e.stopPropagation();
     }
@@ -1070,10 +964,10 @@ function listView(model) {
 
         this.mouseup = function(mouseUpEvent) {
             if (selectedTab == all_devices)
-                on_link_mouseup(mouseUpEvent, this.sourceRow, this.targetRow);
+                on_link(mouseUpEvent, this.sourceRow, this.targetRow);
             else if (this.targetRow) {
-                on_connect_mouseup(mouseUpEvent, this.sourceRow,
-                                   this.targetRow, {'muted': this.muted});
+                on_connect(mouseUpEvent, this.sourceRow,
+                           this.targetRow, {'muted': this.muted});
             }
             $("*").off('.drawing');
             $(document).off('.drawing');
@@ -1202,13 +1096,7 @@ function listView(model) {
 
         // Various keyhandlers
         $('body').on('keydown.list', function(e) {
-            if (e.which == 67) { // connect on 'c'
-                if (selectedTab == all_devices)
-                    on_link(e);
-                else
-                    on_connect(e);
-            }
-            else if (e.which == 8 || e.which == 46) { // disconnect on 'delete'
+            if (e.which == 8 || e.which == 46) { // disconnect on 'delete'
                 // Prevent the browser from going back a page
                 // but NOT if you're focus is an input and deleting text
                 if (!$(':focus').is('input')) {

@@ -229,10 +229,7 @@ TopMenu.prototype = {
      * All views except 'list view' use the model to store selected connections
      */
     get_selected_connections : function() {
-        if ($('#modeSelection').val() == "list")
-            return view.get_selected_connections(model.connections);
-        else
-            return model.getSelectedConnections();
+        return model.getSelectedConnections();
     },
 
     selected_connection_set_mode : function(modestring) {
