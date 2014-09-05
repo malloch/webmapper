@@ -70,7 +70,8 @@ function listView(model) {
         filter_view();
         // update_row_heights();
 
-        $('#container').trigger("updateSaveLocation");    // trigger update save location event
+        // trigger update save location event
+        $('#container').trigger("updateSaveLocation");
     };
 
     this.get_save_location = function() {
@@ -200,7 +201,8 @@ function listView(model) {
                 name = "devices";
             }
             else name = "signals";
-            this.nVisibleRows = $(this.tbody).children('tr').length - $(this.tbody).children('tr.invisible').length;
+            this.nVisibleRows = ($(this.tbody).children('tr').length
+                                 - $(this.tbody).children('tr.invisible').length);
             $(this.footer).text(this.nVisibleRows+" of "+this.nRows+" "+name);
 
             // For styling purposes when there is only a single row
@@ -371,10 +373,7 @@ function listView(model) {
             n_visibleLinks + " of " + model.links.keys().length + " links");
     }
 
-    // Because this is a heavy function, I want to prevent it from being called too rapidly
-    // (it is also never necessary to do so)
-    // It is currently called with a delay of 34ms, if it is called again within that delay
-    // The first call is forgotten.
+    // Prevent this function from being called more than once within timeout.
     var arrowTimeout;
     var arrowCallable = true;
     var timesArrowsCalled = 0;
@@ -460,8 +459,7 @@ function listView(model) {
             $('#saveButton').addClass('disabled');
     }
 
-    // A function for filtering out unconnected signals
-    // Or signals that do not match the search string
+    // Filter out unconnected signals or signals that do not match the search string
     function filter_view() {
         $('.displayTable tbody tr').each(function(i, row) {
             if ((view.unconnectedVisible || is_connected(this)) && filter_match(this))
@@ -507,8 +505,8 @@ function listView(model) {
             return false;
     }
 
-    // Returns whether a row has a connection, have to do it based on monitor.connections
-    // not arrows themselves
+    /* Returns whether a row has a connection, have to do it based on
+     * monitor.connections not arrows themselves. */
     function is_connected(row) {
         // What is the name of the signal/link?
         var name = $(row).children('.name').text();
@@ -516,10 +514,10 @@ function listView(model) {
         var srcNames = [];      // All source names as strings
         var destNames = [];     // All dest names as strings
 
-        if (selectedTab == all_devices) {
+        if (selectedTab == all_devices)
             linkConList = model.links.keys();
-        }
-        else linkConList = model.connections.keys();
+        else
+            linkConList = model.connections.keys();
 
         for (var i in linkConList) {
             var sd = linkConList[i].split('>');
@@ -650,7 +648,9 @@ function listView(model) {
         var name = tr.firstChild.innerHTML.replace(/<wbr>/g,'');
 
         // Is the row on the left or right?
-        var i = (t.parents('.displayTable')[0] == leftTable.table) ? 0 : (t.parents('.displayTable')[0] == rightTable.table) ? 1 : null;
+        var i = ((t.parents('.displayTable')[0] == leftTable.table)
+                 ? 0 : (t.parents('.displayTable')[0] == rightTable.table)
+                 ? 1 : null);
         if (i==null)
             return;
 
@@ -665,7 +665,8 @@ function listView(model) {
         if (t.hasClass("trsel")) {
             t.removeClass("trsel");
             l.remove(name);
-        } else {
+        }
+        else {
             t.addClass("trsel");
             l.add(name, tr.parentNode);
         }
@@ -681,8 +682,10 @@ function listView(model) {
 
     // For selecting multiple rows with the 'shift' key
     function full_select_tr(tr) {
-        var targetTable = $(tr).parents('.tableDiv').attr('id') == 'leftTable' ? '#leftTable' : '#rightTable';
-        var trStart = targetTable == '#leftTable' ? lastSelectedTr.left : lastSelectedTr.right;
+        var targetTable = ($(tr).parents('.tableDiv').attr('id') == 'leftTable'
+                           ? '#leftTable' : '#rightTable');
+        var trStart = (targetTable == '#leftTable'
+                       ? lastSelectedTr.left : lastSelectedTr.right);
         if (!trStart) {
             return;
         }
@@ -750,8 +753,9 @@ function listView(model) {
     }
 
     function on_link(e, start, end) {
-        $('#container').trigger("link", [start.cells[0].textContent,
-                                         end.cells[0].textContent]);
+        if (start && end)
+            $('#container').trigger("link", [start.cells[0].textContent,
+                                             end.cells[0].textContent]);
         e.stopPropagation();
     }
 
@@ -857,12 +861,15 @@ function listView(model) {
         this.clamptorow = function(row) {
             var svgPos = fullOffset($('#svgDiv')[0]);
             var rowPos = fullOffset(row);
-            var y = rowPos.top + rowPos.height/2 - svgPos.top;
+            if (selectedTab == all_devices)
+                var y = rowPos.top + rowPos.height/2 - svgPos.top;
+            else
+                var y = rowPos.top + rowPos.height/3 - svgPos.top;
             return y;
         };
 
         this.findrow = function (y) {
-            // The upper position of the canvas (so that we can find the absolute position)
+            // The upper position of the canvas (to find the absolute position)
             var svgTop = $('#svgDiv').offset().top;
 
             // Left edge of the target table
@@ -871,7 +878,9 @@ function listView(model) {
             // Closest table element (probably a <td> cell)
             var td = document.elementFromPoint(ttleft, svgTop + y);
             var row = $(td).parents('tr')[0];
-            return row;
+            var incompatible = $(row).hasClass('incompatible');
+            if (!incompatible)
+                return row;
         };
 
         // Our bezier curve points
@@ -910,12 +919,20 @@ function listView(model) {
                 var absdiff = Math.abs(end[0] - start[0]);
 
                 // get targetTable
+                var newTargetTable;
                 if (absdiff < this.canvasWidth/2)
-                    this.targetTable = this.sourceTable;
+                    newTargetTable = this.sourceTable;
                 else if (this.sourceTable == leftTable)
-                    this.targetTable = rightTable;
+                    newTargetTable = rightTable;
                 else
-                    this.targetTable = leftTable;
+                    newTargetTable = leftTable;
+                if (this.targetTable != newTargetTable) {
+                    this.targetTable = newTargetTable;
+                    // Fade out incompatible signals
+                    if (selectedTab != all_devices)
+                        fade_incompatible_signals(this.sourceRow,
+                                                  this.targetTable.tbody);
+                }
 
                 // Within clamping range?
                 if (absdiff < 50) {
@@ -969,7 +986,7 @@ function listView(model) {
                 on_connect(mouseUpEvent, this.sourceRow,
                            this.targetRow, {'muted': this.muted});
             }
-            $("*").off('.drawing');
+            $("*").off('.drawing').removeClass('incompatible');
             $(document).off('.drawing');
             self.line.remove();
         };
@@ -977,14 +994,18 @@ function listView(model) {
         // Check if we have a new target row, select it if necessary
         this.checkTarget = function(mousedOverRow) {
             if (this.targetRow != mousedOverRow) {
-                if (this.targetRow != null) {
+                if (this.targetRow != null
+                    && !$(this.targetRow).hasClass('incompatible')) {
                     if (this.sourceRow != this.targetRow || !allow_self_link)
                         select_tr(this.targetRow);
                 }
 
-                this.targetRow = mousedOverRow;
+                if (!$(mousedOverRow).hasClass('incompatible'))
+                    this.targetRow = mousedOverRow;
+                else
+                    this.targetRow = null;
 
-                if (this.targetRow)
+                if (this.targetRow && !$(this.targetRow).hasClass('incompatible'))
                     select_tr(this.targetRow);
             }
         };
@@ -1019,6 +1040,15 @@ function listView(model) {
         path[1][6] = end[1];
 
         return path;
+    }
+
+    function fade_incompatible_signals(row, targetTableBody) {
+        for (var i in arrows) {
+            if (arrows[i].srcTr == row)
+                $(arrows[i].destTr).addClass('incompatible');
+            else if (arrows[i].destTr == row)
+                $(arrows[i].srcTr).addClass('incompatible');
+        }
     }
 
     function drawing_handlers() {
@@ -1065,7 +1095,7 @@ function listView(model) {
             });
 
             $(document).one('mouseup.drawing', function(mouseUpEvent) {
-                $("*").off('.drawing');
+                $("*").off('.drawing').removeClass('incompatible');
                 $(document).off('.drawing');
             });
         });
