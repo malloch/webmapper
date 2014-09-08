@@ -599,13 +599,13 @@ function listView(model) {
 
             if (selectedTab == all_devices) {
                 if (e.shiftKey == false)
-                    model.selectedLinks_clearAll();
+                    deselect_all();
                 if (model.selectedLinks_toggleLink(_src, _dst))
                     update_arrows();
             }
             else {
                 if (e.shiftKey == false)
-                    model.selectedConnections_clearAll();
+                    deselect_all();
                 if (model.selectedConnections_toggleConnection(_src, _dst))
                     update_arrows();
             }
@@ -861,10 +861,7 @@ function listView(model) {
         this.clamptorow = function(row) {
             var svgPos = fullOffset($('#svgDiv')[0]);
             var rowPos = fullOffset(row);
-            if (selectedTab == all_devices)
-                var y = rowPos.top + rowPos.height/2 - svgPos.top;
-            else
-                var y = rowPos.top + rowPos.height/3 - svgPos.top;
+            var y = rowPos.top + rowPos.height/2 - svgPos.top;
             return y;
         };
 
@@ -993,21 +990,16 @@ function listView(model) {
 
         // Check if we have a new target row, select it if necessary
         this.checkTarget = function(mousedOverRow) {
-            if (this.targetRow != mousedOverRow) {
-                if (this.targetRow != null
-                    && !$(this.targetRow).hasClass('incompatible')) {
-                    if (this.sourceRow != this.targetRow || !allow_self_link)
-                        select_tr(this.targetRow);
-                }
-
-                if (!$(mousedOverRow).hasClass('incompatible'))
-                    this.targetRow = mousedOverRow;
-                else
-                    this.targetRow = null;
-
-                if (this.targetRow && !$(this.targetRow).hasClass('incompatible'))
-                    select_tr(this.targetRow);
+            if (this.targetRow == mousedOverRow
+                || $(mousedOverRow).hasClass('incompatible')
+                || (this.sourceRow == this.targetRow && !allow_self_link))
+                return;
+            if (this.targetRow != null) {
+                // deselect previous
+                select_tr(this.targetRow);
             }
+            this.targetRow = mousedOverRow;
+            select_tr(this.targetRow);
         };
     }
 
@@ -1110,6 +1102,8 @@ function listView(model) {
             mousedown: function(e) {
                 if (e.shiftKey == true)    // For selecting multiple rows at once
                     full_select_tr(this);
+                else
+                    deselect_all();
                 select_tr(this);
                 update_arrows();
             },
