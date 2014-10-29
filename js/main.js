@@ -96,15 +96,15 @@ function initMonitorCommands()
     });
     command.register("all_links", function(cmd, args) {
         for (var l in args)
-            model.links.add(args[l].src_name + '>' + args[l].dest_name, args[l]);
+            model.links.add(args[l].name1 + '>' + args[l].name2, args[l]);
         update_display();
     });
     command.register("new_link", function(cmd, args) {
-        model.links.add(args.src_name+'>'+args.dest_name, args);
+        model.links.add(args.name1+'>'+args.name2, args);
         update_display();
     });
     command.register("del_link", function(cmd, args) {
-        model.links.remove(args.src_name+'>' + args.dest_name);
+        model.links.remove(args.name1+'>' + args.name2);
         update_display();
     });
     command.register("all_connections", function(cmd, args) {

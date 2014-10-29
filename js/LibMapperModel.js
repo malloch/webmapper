@@ -67,6 +67,14 @@ LibMapperModel.prototype = {
         return this.connections.get(key);
     },
 
+    getLinkKey : function(dev1, dev2) {
+        if (src < dest)
+            var key = src + ">" + dst;
+        else
+            var key = dst + ">" + src;
+        return key;
+    },
+
     selectedLinks_toggleLink : function(src, dst) {
         // no polymorphism in JS... arrg!
         // called with no 'dst' if the full key is passed in src
@@ -97,23 +105,20 @@ LibMapperModel.prototype = {
         return false;
     },
 
-    getLink : function(src, dst) {
-        if (src < dest)
-            var key = src + ">" + dst;
-        else
-            var key = dst + ">" + src;
+    getLink : function(dev1, dev2) {
+        var key = getLinkKey(dev1, dev2);
         return this.links.get(key);
     },
 
-    isLinked : function(src, dst) {
-        if (src && dst) {
-            var link = this.getLink(src, dst);
+    isLinked : function(dev1, dev2) {
+        if (dev1 && dev2) {
+            var link = this.getLink(dev1, dev2);
             if (link)
                 return true;
         }
-        else if (src) {
+        else if (dev1) {
             // check all links
-            var keypart = src + ">";
+            var keypart = dev1 + ">";
             var links = this.links.keys();
             for (var d in links) {
                 var k = links[d];

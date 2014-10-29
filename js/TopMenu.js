@@ -1,10 +1,13 @@
 function TopMenu(container, model) {
     this._container = container;
     this.model = model;
-    this.connectionModesDisplayOrder = ["Byp", "Line", "Calib", "Expr"];
-    this.connectionModeCommands = {"Byp": 'bypass', "Line": 'linear',
-                                   "Calib": 'calibrate', "Expr": 'expression' };
-    this.connectionModes = ["None", "Byp", "Line", "Expr", "Calib"];
+    this.connectionModesDisplayOrder = ["Raw", "Byp", "Line", "Calib", "Expr"];
+    this.connectionModeCommands = { "Raw": 'raw',
+                                    "Byp": 'bypass',
+                                    "Line": 'linear',
+                                    "Calib": 'calibrate',
+                                    "Expr": 'expression' };
+    this.connectionModes = ["Undefined", "None", "Byp", "Raw", "Line", "Expr", "Calib"];
     this.boundaryModes = ["None", "Mute", "Clamp", "Fold", "Wrap"];
     this.boundaryIcons = ["boundaryNone", "boundaryUp", "boundaryDown",
                           "boundaryMute", "boundaryClamp", "boundaryWrap"];

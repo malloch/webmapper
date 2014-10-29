@@ -105,6 +105,10 @@ function listView(model) {
                 var destD = model.devices.get(devs[1]);
                 focusedDevices.add(destD.name, destD);
             }
+            else if (devs[1] == sourceDevice.name) {
+                var destD = model.devices.get(devs[0]);
+                focusedDevices.add(destD.name, destD);
+            }
         }
 
         return focusedDevices;
@@ -327,11 +331,11 @@ function listView(model) {
             var sel = 0;
 
             for (var i = 0, row; row = leftTable.table.rows[i]; i++) {
-                if (row.cells[0].textContent == l.src_name) {
+                if (row.cells[0].textContent == l.name1) {
                     var src = row;
                     src_found = 1;
                 }
-                if (row.cells[0].textContent == l.dest_name) {
+                if (row.cells[0].textContent == l.name2) {
                     var dest = row;
                     dest_found = 1;
                 }
@@ -340,11 +344,11 @@ function listView(model) {
             }
             if (!src_found || !dest_found) {
                 for (var i = 0, row; row = rightTable.table.rows[i]; i++) {
-                    if (row.cells[0].textContent == l.src_name) {
+                    if (row.cells[0].textContent == l.name1) {
                         var src = row;
                         src_found = 2;
                     }
-                    if (row.cells[0].textContent == l.dest_name) {
+                    if (row.cells[0].textContent == l.name2) {
                         var dest = row;
                         dest_found = 2;
                     }
@@ -763,7 +767,7 @@ function listView(model) {
         var keys = model.selectedLinks.keys();
         for (var k in keys) {
             var l = model.selectedLinks.get(keys[k]);
-            $('#container').trigger("unlink", [l.src_name, l.dest_name]);
+            $('#container').trigger("unlink", [l.name1, l.name2]);
         }
         e.stopPropagation();
     }
