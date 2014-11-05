@@ -72,7 +72,10 @@ LibMapperModel.prototype = {
     },
 
     getLink : function(src, dst) {
-        var key = src + ">" + dst;
+        if (src < dest)
+            var key = src + ">" + dst;
+        else
+            var key = dst + ">" + src;
         return this.links.get(key);
     },
 
