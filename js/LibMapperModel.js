@@ -217,9 +217,9 @@ MapperEdgeArray.prototype = {
     remove : function(arg) {
         let key = this.getkey(arg);
         if (key && this.contents[key]) {
+            delete this.contents[key];
             if (this.cb_func)
                 this.cb_func(this.obj_type, 'removed', key);
-            delete this.contents[key];
         }
         return key;
     },
