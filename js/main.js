@@ -1,5 +1,5 @@
 "use strict";
-var database = new MapperDatabase();
+var graph = new MapperGraph();
 
 var view;                       // holds the current view object
 var viewIndex;                  // index of current view
@@ -32,10 +32,10 @@ function init() {
     viewSelector = new ViewSelector(document.getElementById("TopMenuWrapper"));
     viewSelector.init();
     devFilter = new SignalFilter(document.getElementById("TopMenuWrapper"),
-                                 database);
+                                 graph);
     devFilter.init();
     mapProperties = new MapProperties(document.getElementById("TopMenuWrapper"),
-                                      database);
+                                      graph);
     mapProperties.init();
 
     // init controller
@@ -69,13 +69,12 @@ function init() {
                 switch_mode('new');
                 command.start();
                 command.send('refresh');
-                command.send('get_networks');
+                command.send('get_interfaces');
                 command.send('subscribe', 'all_devices');
                 command.send('add_devices');
                 break;
             case 1:
                 command.send('add_signals');
-                command.send('add_links');
                 break;
             case 2:
                 command.send('add_maps');
@@ -89,12 +88,12 @@ function init() {
  * initialize the event listeners for events triggered by the monitor
  */
 function initMonitorCommands() {
-    command.register("available_networks", function(cmd, args) {
-        database.networkInterfaces.available = args;
+    command.register("available_interfaces", function(cmd, args) {
+        graph.networkInterfaces.available = args;
         mapProperties.updateNetworkInterfaces(args);
     });
-    command.register("active_network", function(cmd, args) {
-        database.networkInterfaces.selected = args
+    command.register("active_interface", function(cmd, args) {
+        graph.networkInterfaces.selected = args
         mapProperties.updateNetworkInterfaces(args);
     });
 }
@@ -144,7 +143,7 @@ function initViewCommands()
     // TODO: add "save as" option
     $('#saveButton').on('click', function(e) {
         e.stopPropagation();
-        let file = database.exportFile();
+        let file = graph.exportFile();
         if (!file)
             return;
 
@@ -265,7 +264,7 @@ function initViewCommands()
     $("#container").on("tab", function(e, tab){
         if (tab != 'All Devices') {
             // retrieve linked destination devices
-            database.links.each(function(link) {
+            graph.links.each(function(link) {
                 if (tab == link.src)
                     command.send('subscribe', link.dst);
                 else if (tab == link.dst)
@@ -273,20 +272,6 @@ function initViewCommands()
             });
             command.send('subscribe', tab);
         }
-    });
-
-    // link command
-    // src = "devicename"
-    // dst = "devicename"
-    $("#container").on("link", function(e, src, dst) {
-        database.links.add({ 'src' : src, 'dst' : dst, 'num_maps': [0, 0] });
-    });
-
-    // unlink command
-    // src = "devicename"
-    // dst = "devicename"
-    $("#container").on("unlink", function(e, src, dst) {
-        database.links.remove(src, dst);
     });
 
     // map command
@@ -353,7 +338,7 @@ function initViewCommands()
                     reader.abort();
                     return;
                 }
-                database.loadFile(parsed);
+                graph.loadFile(parsed);
                 view.switch_view("chord");
             };
         })(f);
@@ -369,13 +354,13 @@ function initMapPropertiesCommands()
     $("#TopMenuWrapper").on("refreshAll", function(e) {
         refresh_all();
     });
-    $("#TopMenuWrapper").on("selectNetwork", function(e, network) {
-        command.send('select_network', network);
+    $("#TopMenuWrapper").on("selectInterface", function(e, iface) {
+        command.send('select_interface', iface);
     });
 }
 
 function refresh_all() {
-    database.clearAll();
+    graph.clearAll();
     command.send('refresh');
 }
 
@@ -396,12 +381,12 @@ function switch_mode(newMode)
     $('#container').empty();
     switch (newMode) {
         case 'classic':
-            view = new listView(database);
+            view = new listView(graph);
             viewIndex = 0;
             view.init();
             break;
         case 'new':
-            view = new ViewManager(document.getElementById('container'), database);
+            view = new ViewManager(document.getElementById('container'), graph);
             viewIndex = 3;
             view.init();
             view.on_resize();

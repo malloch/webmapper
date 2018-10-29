@@ -33,10 +33,6 @@ class File {
                 dst.minimum = c.dstMin;
             if (c.dstMax != null)
                 dst.maximum = c.dstMax;
-            if (c.boundMin != null)
-                dst.bound_min = c.boundMin;
-            if (c.boundMax != null)
-                dst.bound_max = c.boundMax;
 
             if (c.mode == 'reverse') {
                 map.mode = 'expression';

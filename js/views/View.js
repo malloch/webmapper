@@ -4,7 +4,7 @@
 
 // public functions
 // resize() // called when window size changes
-// update() // called on changes to the database
+// update() // called on changes to the graph
 // draw() // called by update/pan/scroll events
 // cleanup() // called when view is destroyed
 // type() // returns view type
@@ -12,12 +12,12 @@
 'use strict';
 
 class View {
-    constructor(type, frame, tables, canvas, database) {
+    constructor(type, frame, tables, canvas, graph) {
         this.type = type;
         this.frame = frame;
         this.tables = tables,
         this.canvas = canvas;
-        this.database = database;
+        this.graph = graph;
 
         this.srcregexp = null;
         this.dstregexp = null;
@@ -68,7 +68,7 @@ class View {
 
         // remove tableIndices from last view
         let self = this;
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             dev.signals.each(function(sig) {
                 if (sig.tableIndices) {
                     delete sig.tableIndices;
@@ -82,7 +82,7 @@ class View {
         this.sigLabel = null;
 
         // default to arrowheads on maps
-        this.database.maps.each(function(map) {
+        this.graph.maps.each(function(map) {
             if (map.view)
                 map.view.attr({'arrow-end': 'block-wide-long'});
         });
@@ -122,7 +122,7 @@ class View {
 
         let self = this;
         let devIndex = 0;
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             // update device signals
             let sigIndex = 0;
             dev.signals.each(function(sig) {
@@ -197,7 +197,7 @@ class View {
     drawDevices(duration) {
         let self = this;
         let cx = this.frame.cx;
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             if (!dev.view || !dev.tableIndices || !dev.tableIndices.length)
                 return;
             dev.view.stop();
@@ -362,11 +362,11 @@ class View {
 
     updateLinks() {
         let self = this;
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             dev.linkSrcIndices = [];
             dev.linkDstIndices = [];
         });
-        this.database.links.each(function(link) {
+        this.graph.links.each(function(link) {
             let src = link.src;
             let dst = link.dst;
             if (!src.linkDstIndices.includes(dst.index)) {
@@ -404,7 +404,8 @@ class View {
             function() {
                 if (!sig.view.label) {
                     // show label
-                    let typestring = sig.length > 1 ? sig.type+'['+sig.length+']' : sig.type;
+                    let type = String.fromCharCode(sig.type);
+                    let typestring = sig.length > 1 ? type+'['+sig.length+']' : type;
                     let minstring = sig.min != null ? sig.min : '';
                     let maxstring = sig.max != null ? sig.max : '';
                     $('#status').stop(true, false)
@@ -501,7 +502,7 @@ class View {
 
     updateSignals(func) {
         let self = this;
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             dev.signals.each(function(sig) {
                 if (sig.view)
                     sig.view.stop();
@@ -551,7 +552,7 @@ class View {
 
     drawSignals(duration) {
         let self = this;
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             dev.signals.each(function(sig) {
                 self.drawSignal(sig, duration);
             });
@@ -571,7 +572,6 @@ class View {
                                             "<tr><th colspan='2'>Map</th></tr>"+
                                                 "<tr><td>source</td><td>"+map.src.key+"</td></tr>"+
                                                 "<tr><td>destination</td><td>"+map.dst.key+"</td></tr>"+
-                                                "<tr><td>mode</td><td>"+map.mode+"</td></tr>"+
                                                 "<tr><td>expression</td><td>"+map.expression+"</td></tr>"+
                                         "</tbody>"+
                                     "</table>")
@@ -607,7 +607,7 @@ class View {
 
     updateMaps() {
         let self = this;
-        this.database.maps.each(function(map) {
+        this.graph.maps.each(function(map) {
             // todo: check if signals are visible
             if (!map.view) {
                 let pos = map.src.position;
@@ -702,7 +702,7 @@ class View {
 
     drawMaps(duration) {
         let self = this;
-        this.database.maps.each(function(map) {
+        this.graph.maps.each(function(map) {
             if (!map.view)
                 return;
             if (map.hidden) {
@@ -912,7 +912,7 @@ class View {
                     return;
             }
             if ($(src_row).hasClass('device')) {
-                let dev = self.database.devices.find(src_row.id);
+                let dev = self.graph.devices.find(src_row.id);
                 if (dev) {
                     switch (src_table) {
                     case self.tables.left:
@@ -1013,10 +1013,10 @@ class View {
                     $('svg, .displayTable tbody tr').off('.drawing');
                     if (dst && dst.id) {
                         $('#container').trigger('map', [src.id, dst.id]);
-                        self.database.maps.add({'src': self.database.find_signal(src.id),
-                                        'dst': self.database.find_signal(dst.id),
-                                        'key': src.id + '->' + dst.id,
-                                        'status': 'staged'});
+                        self.graph.maps.add({'src': self.graph.find_signal(src.id),
+                                             'dst': self.graph.find_signal(dst.id),
+                                             'key': src.id + '->' + dst.id,
+                                             'status': 'staged'});
                     }
                     // clear table highlights
                     self.tables.left.highlightRow(null, true);

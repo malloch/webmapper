@@ -5,9 +5,9 @@
 'use strict';
 
 class LinkView extends View {
-    constructor(frame, tables, canvas, database) {
+    constructor(frame, tables, canvas, graph) {
         super('link', frame, {'left': tables.left, 'right': tables.right},
-              canvas, database);
+              canvas, graph);
 
         // set left table properties
         this.tables.left.collapseAll = true;
@@ -21,13 +21,13 @@ class LinkView extends View {
         this.tables.right.showDetail(false);
 
         // remove associated svg elements for signals
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             if (dev.view && dev.view.label)
                 dev.view.label.remove();
             dev.signals.each(function(sig) { remove_object_svg(sig); });
         });
         // remove associated svg elements for maps
-        this.database.maps.each(function(map) { remove_object_svg(map); });
+        this.graph.maps.each(function(map) { remove_object_svg(map); });
 
         this.pan = this.tablePan;
         this.zoom = this.tableZoom;
@@ -71,7 +71,7 @@ class LinkView extends View {
 
         let self = this;
 
-        this.database.links.each(function(link) {
+        this.graph.links.each(function(link) {
             if (!link.view)
                 return;
             link.view.stop();
@@ -120,7 +120,7 @@ class LinkView extends View {
 
     drawDevices(duration) {
         let self = this;
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             if (!dev.view || !dev.tableIndices || !dev.tableIndices.length)
                 return;
             dev.view.stop();
@@ -158,10 +158,10 @@ class LinkView extends View {
         this.tables.left.collapseAll = false;
         this.tables.right.collapseAll = false;
 
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             delete dev.linkSrcIndices;
             delete dev.linkDstIndices;
         });
-        this.database.links.each(remove_object_svg);
+        this.graph.links.each(remove_object_svg);
     }
 }

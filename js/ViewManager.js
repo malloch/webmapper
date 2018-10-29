@@ -2,7 +2,7 @@
 //         ViewManager Class            //
 //++++++++++++++++++++++++++++++++++++++//
 
-function ViewManager(container, database)
+function ViewManager(container, graph)
 {
     let frame = null;
     let canvas = null;
@@ -39,35 +39,35 @@ function ViewManager(container, database)
 
         switch (viewType) {
             case 'balloon':
-                view = new BalloonView(frame, tables, canvas, database);
+                view = new BalloonView(frame, tables, canvas, graph);
                 break;
             case 'canvas':
-                view = new CanvasView(frame, tables, canvas, database);
+                view = new CanvasView(frame, tables, canvas, graph);
                 break;
             case 'graph':
-                view = new GraphView(frame, tables, canvas, database);
+                view = new GraphView(frame, tables, canvas, graph);
                 break;
             case 'grid':
-                view = new GridView(frame, tables, canvas, database);
+                view = new GridView(frame, tables, canvas, graph);
                 break;
             case 'parallel':
-                view = new ParallelView(frame, tables, canvas, database);
+                view = new ParallelView(frame, tables, canvas, graph);
                 break;
             case 'hive':
-                view = new HiveView(frame, tables, canvas, database);
+                view = new HiveView(frame, tables, canvas, graph);
                 break;
             case 'link':
-                view = new LinkView(frame, tables, canvas, database);
+                view = new LinkView(frame, tables, canvas, graph);
                 break;
             case 'chord':
-                view = new ChordView(frame, tables, canvas, database);
+                view = new ChordView(frame, tables, canvas, graph);
                 break;
             case 'console':
-                view = new ConsoleView(frame, tables, canvas, database);
+                view = new ConsoleView(frame, tables, canvas, graph);
                 break;
             case 'list':
             default:
-                view = new ListView(frame, tables, canvas, database);
+                view = new ListView(frame, tables, canvas, graph);
                 break;
         }
 
@@ -85,9 +85,9 @@ function ViewManager(container, database)
         $('#status').text('');
     }
 
-    add_database_callbacks = function() {
-        database.clear_callbacks();
-        database.add_callback(function(event, type, obj) {
+    add_graph_callbacks = function() {
+        graph.clear_callbacks();
+        graph.add_callback(function(event, type, obj) {
             if (event == 'removing') {
                 remove_object_svg(obj);
                 return;
@@ -110,8 +110,8 @@ function ViewManager(container, database)
     };
 
     function add_display_tables() {
-        tables.left  = new Table($('#container')[0], 'left', frame, database);
-        tables.right = new Table($('#container')[0], 'right', frame, database);
+        tables.left  = new Table($('#container')[0], 'left', frame, graph);
+        tables.right = new Table($('#container')[0], 'right', frame, graph);
     }
 
     function add_canvas() {
@@ -134,9 +134,9 @@ function ViewManager(container, database)
 
         selection_handlers();
 
-        add_database_callbacks();
-        database.devices.each(function(dev) { update_devices(dev, 'added'); });
-        database.maps.each(function(map) { update_maps(map, 'added'); });
+        add_graph_callbacks();
+        graph.devices.each(function(dev) { update_devices(dev, 'added'); });
+        graph.maps.each(function(map) { update_maps(map, 'added'); });
     }
 
     function update_devices(dev, event) {
@@ -193,7 +193,7 @@ function ViewManager(container, database)
                     e.preventDefault();
                 }
                 /* delete */
-                database.maps.each(function(map) {
+                graph.maps.each(function(map) {
                     if (map.view && map.view.selected)
                         $('#container').trigger('unmap', [map.src.key, map.dst.key]);
                 });
@@ -255,7 +255,7 @@ function ViewManager(container, database)
 
             // check for edge intersections around point for 'click' selection
             let updated = false;
-            database.maps.each(function(map) {
+            graph.maps.each(function(map) {
                 if (!map.view || map.view.selected)
                     return;
                 if (   edge_intersection(map.view, x1-3, y1-3, x1+3, y1+3)
@@ -280,7 +280,7 @@ function ViewManager(container, database)
 
                 // check for edge intersections for 'cross' selection
                 update = false;
-                database.maps.each(function(map) {
+                graph.maps.each(function(map) {
                     if (!map.view || map.view.selected)
                         return;
                     if (edge_intersection(map.view, x1, y1, x2, y2)) {

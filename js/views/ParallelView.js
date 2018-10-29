@@ -5,15 +5,15 @@
 'use strict';
 
 class ParallelView extends View {
-    constructor(frame, tables, canvas, database) {
-        super('parallel', frame, null, canvas, database);
+    constructor(frame, tables, canvas, graph) {
+        super('parallel', frame, null, canvas, graph);
 
         // hide tables
         tables.left.adjust(0, 0, 0, frame.height, 0, 1000);
         tables.right.adjust(frame.width, 0, 0, frame.height, 0, 1000);
 
         // remove link svg
-        this.database.links.each(remove_object_svg);
+        this.graph.links.each(remove_object_svg);
 
         this.pan = this.canvasPan;
 //        this.zoom = this.canvasZoom;
@@ -79,7 +79,7 @@ class ParallelView extends View {
     drawDevices(duration, dev) {
         let self = this;
 
-        let dev_num = this.database.devices.size();
+        let dev_num = this.graph.devices.size();
         if (dev_num && dev_num > 1)
             dev_num -= 1;
         else
@@ -89,7 +89,7 @@ class ParallelView extends View {
         if (dev)
             self.drawDevice(dev, duration, devInc, self);
         else {
-            this.database.devices.each(function(dev) {
+            this.graph.devices.each(function(dev) {
                 self.drawDevice(dev, duration, devInc, self);
             });
         }

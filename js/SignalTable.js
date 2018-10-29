@@ -2,8 +2,8 @@
 
 // An object for the overall display
 class Table {
-    constructor(container, location, frame, database) {
-        this.database = database;
+    constructor(container, location, frame, graph) {
+        this.graph = graph;
         this.id = location + 'Table';
         this.detail = true;
         this.direction = null;
@@ -484,7 +484,7 @@ class Table {
         }
         let title = this.title;
 
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             let num_dev_sigs = 0;
             let sigs = [];
             dev.signals.each(function(sig) {
@@ -521,7 +521,7 @@ class Table {
                 if (max.indexOf(',') >= 0)
                     max = '[ ' + max + ' ]';
                 let type;
-                switch (sig.type) {
+                switch (String.fromCharCode(sig.type)) {
                     case 'i':
                         type = 'int';
                         break;

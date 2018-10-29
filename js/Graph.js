@@ -1,6 +1,8 @@
 function is_equal(one, two) {
     if (typeof(one) != typeof(two))
         return false;
+    if (one == null || two == null)
+        return one == two;
     if (typeof(one) == 'object') {
         if (one.key)
             return one.key == two.key;
@@ -196,7 +198,7 @@ MapperEdgeArray.prototype = {
     },
 };
 
-function MapperDatabase() {
+function MapperGraph() {
     callbacks = [];
     this.add_callback = function(f) {
         callbacks.push(f);
@@ -395,10 +397,6 @@ function MapperDatabase() {
                     dst.minimum = c.dstMin;
                 if (c.dstMax != null)
                     dst.maximum = c.dstMax;
-                if (c.boundMin != null)
-                    dst.bound_min = c.boundMin;
-                if (c.boundMax != null)
-                    dst.bound_max = c.boundMax;
 
                 if (c.mode == 'reverse') {
                     map.mode = 'expression';
@@ -452,14 +450,6 @@ function MapperDatabase() {
                 console.log("error adding map from file:", map);
                 continue;
             }
-            if (map.sources[0].bound_min)
-                map.src_bound_min = map.sources[0].bound_min;
-            if (map.sources[0].bound_max)
-                map.src_bound_min = map.sources[0].bound_max;
-            if (map.destinations[0].bound_min)
-                map.dst_bound_min = map.destinations[0].bound_min;
-            if (map.destinations[0].bound_max)
-                map.dst_bound_min = map.destinations[0].bound_max;
             if (map.sources[0].calibrating)
                 map.src_calibrating = map.sources[0].calibrating;
             if (map.destinations[0].calibrating)

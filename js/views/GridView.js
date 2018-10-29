@@ -5,9 +5,9 @@
 'use strict';
 
 class GridView extends View {
-    constructor(frame, tables, canvas, database) {
+    constructor(frame, tables, canvas, graph) {
         super('grid', frame, {'left': tables.left, 'right': tables.right},
-              canvas, database);
+              canvas, graph);
 
         // set left table properties
         tables.left.filterByDirection('output');
@@ -19,14 +19,14 @@ class GridView extends View {
         this.tables.right.showDetail(false);
 
         let self = this;
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             // remove signal svg
             dev.signals.each(remove_object_svg);
             remove_object_svg(dev);
         });
 
         // remove link svg
-        this.database.links.each(remove_object_svg);
+        this.graph.links.each(remove_object_svg);
 
         this.map_pane;
         this.escaped = false;
@@ -87,7 +87,7 @@ class GridView extends View {
     cleanup() {
         super.cleanup();
 
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             dev.signals.each(function(sig) {
                 if (sig.view) {
                     delete sig.view;

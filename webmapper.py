@@ -9,14 +9,6 @@ from random import randint
 
 networkInterfaces = {'active': '', 'available': []}
 
-boundaryModes = ['Undefined', 'None', 'Mute', 'Clamp', 'Fold', 'Wrap']
-boundaryStrings = { 'Undefined': mapper.BOUND_UNDEFINED,
-                    'None': mapper.BOUND_NONE,
-                    'Mute': mapper.BOUND_MUTE,
-                    'Clamp': mapper.BOUND_CLAMP,
-                    'Fold': mapper.BOUND_FOLD,
-                    'Wrap': mapper.BOUND_WRAP }
-
 dirname = os.path.dirname(__file__)
 if dirname:
    os.chdir(os.path.dirname(__file__))
@@ -48,23 +40,13 @@ def open_gui(port):
     launcher = threading.Thread(target=launch)
     launcher.start()
 
-db = mapper.database()
+graph = mapper.graph()
 
 def dev_props(dev):
     props = dev.properties.copy()
     if 'synced' in props:
         props['synced'] = props['synced'].get_double()
-    props['key'] = dev.name
-    props['status'] = 'active'
-    del props['is_local']
-    del props['id']
-    return props
-
-def link_props(link):
-    props = link.properties.copy()
-    props['src'] = link.device(0).name
-    props['dst'] = link.device(1).name
-    props['key'] = link.device(0).name + '<->' + link.device(1).name
+    props['key'] = dev['name']
     props['status'] = 'active'
     del props['is_local']
     del props['id']
@@ -72,27 +54,27 @@ def link_props(link):
 
 def sig_props(sig):
     props = sig.properties.copy()
-    props['device'] = sig.device().name
+    props['device'] = sig.device()['name']
     props['key'] = props['device'] + '/' + props['name']
-    props['num_maps'] = sig.num_maps;
+    props['num_maps'] = sig['num_maps'];
     props['status'] = 'active'
     del props['is_local']
     del props['id']
-    if props['direction'] == mapper.DIR_INCOMING:
+    if props['direction'] == mapper.DIR_IN:
         props['direction'] = 'input'
     else:
         props['direction'] = 'output'
     return props
 
 def full_signame(sig):
-    return sig.device().name + '/' + sig.name
+    return sig.device()['name'] + '/' + sig['name']
 
 def map_props(map):
     props = map.properties.copy()
-    props['src'] = full_signame(map.source().signal())
-    props['dst'] = full_signame(map.destination().signal())
+    props['src'] = full_signame(map.source())
+    props['dst'] = full_signame(map.destination())
     props['key'] = props['src'] + '->' + props['dst']
-    if props['process_location'] == mapper.LOC_SOURCE:
+    if props['process_location'] == mapper.LOC_SRC:
         props['process_location'] = 'source'
     else:
         props['process_location'] = 'destination'
@@ -106,21 +88,11 @@ def map_props(map):
     del props['is_local']
     del props['id']
 
-    # translate some other properties
-    if props['mode'] == mapper.MODE_LINEAR:
-        props['mode'] = 'linear'
-    elif props['mode'] == mapper.MODE_EXPRESSION:
-        props['mode'] = 'expression'
-
     slotprops = map.source().properties
     if slotprops.has_key('min'):
         props['src_min'] = slotprops['min']
     if slotprops.has_key('max'):
         props['src_max'] = slotprops['max']
-    if slotprops.has_key('bound_min'):
-        props['src_bound_min'] = boundaryModes[slotprops['bound_min']]
-    if slotprops.has_key('bound_max'):
-        props['src_bound_max'] = boundaryModes[slotprops['bound_max']]
     if slotprops.has_key('calibrating'):
         props['src_calibrating'] = slotprops['calibrating']
 
@@ -129,15 +101,11 @@ def map_props(map):
         props['dst_min'] = slotprops['min']
     if slotprops.has_key('max'):
         props['dst_max'] = slotprops['max']
-    if slotprops.has_key('bound_min'):
-        props['dst_bound_min'] = boundaryModes[slotprops['bound_min']]
-    if slotprops.has_key('bound_max'):
-        props['dst_bound_max'] = boundaryModes[slotprops['bound_max']]
     if slotprops.has_key('calibrating'):
         props['dst_calibrating'] = slotprops['calibrating']
     return props
 
-def on_device(dev, action):
+def on_device(type, dev, action):
     if action == mapper.ADDED or action == mapper.MODIFIED:
 #        print 'ON_DEVICE (added or modified)', dev_props(dev)
         server.send_command("add_devices", [dev_props(dev)])
@@ -147,17 +115,8 @@ def on_device(dev, action):
     elif action == mapper.EXPIRED:
 #        print 'ON_DEVICE (expired)', dev_props(dev)
         server.send_command("del_device", dev_props(dev))
-        db.flush()
 
-def on_link(link, action):
-    if action == mapper.ADDED or action == mapper.MODIFIED:
-#        print 'ON_LINK (added or modified)', link_props(link)
-        server.send_command("add_links", [link_props(link)])
-    elif action == mapper.REMOVED:
-#        print 'ON_LINK (removed)', link_props(link)
-        server.send_command("del_link", link_props(link))
-
-def on_signal(sig, action):
+def on_signal(type, sig, action):
     if action == mapper.ADDED or action == mapper.MODIFIED:
 #        print 'ON_SIGNAL (added or modified)', sig_props(sig)
         server.send_command("add_signals", [sig_props(sig)])
@@ -165,7 +124,7 @@ def on_signal(sig, action):
 #        print 'ON_SIGNAL (removed)', sig_props(sig)
         server.send_command("del_signal", sig_props(sig))
 
-def on_map(map, action):
+def on_map(type, map, action):
     if action == mapper.ADDED or action == mapper.MODIFIED:
 #        print 'ON_MAP (added or modified)', map_props(map)
         server.send_command("add_maps", [map_props(map)])
@@ -180,17 +139,10 @@ def set_map_properties(props):
     if not map:
         print "error: couldn't retrieve map ", props['src'], " -> ", props['dst']
         return
-    if props.has_key('mode'):
-        if props['mode'] == 'linear':
-            map.mode = mapper.MODE_LINEAR
-        elif props['mode'] == 'expression':
-            map.mode = mapper.MODE_EXPRESSION
-        else:
-            print 'error: unknown mode ', props['mode']
     if props.has_key('expression'):
-        map.expression = props['expression']
+        map[mapper.PROP_EXPR] = props['expression']
     if props.has_key('muted'):
-        map.muted = props['muted']
+        map[mapper.PROP_MUTED] = props['muted']
 
     slot = map.source()
     if props.has_key('src_min'):
@@ -219,10 +171,6 @@ def set_map_properties(props):
             slot.maximum = props['src_max']
     if props.has_key('src_calibrating'):
         slot.calibrating = props['src_calibrating']
-    if props.has_key('src_bound_min'):
-        slot.bound_min = boundaryStrings[props['src_bound_min']]
-    if props.has_key('src_bound_max'):
-        slot.bound_max = boundaryStrings[props['src_bound_max']]
 
     slot = map.destination()
     if props.has_key('dst_min'):
@@ -251,29 +199,24 @@ def set_map_properties(props):
             slot.maximum = props['dst_max']
     if props.has_key('dst_calibrating'):
         slot.calibrating = props['dst_calibrating']
-    if props.has_key('dst_bound_min'):
-        slot.bound_min = boundaryStrings[props['dst_bound_min']]
-    if props.has_key('dst_bound_max'):
-        slot.bound_max = boundaryStrings[props['dst_bound_max']]
 #    print 'pushing map'
     map.push()
 
 def on_save(arg):
-    d = db.device(arg['dev'])
+    d = graph.devices().filter('name', arg['dev']).next()
     fn = d.name+'.json'
-    return fn, mapperstorage.serialise(db, arg['dev'])
+    return fn, mapperstorage.serialise(graph, arg['dev'])
 
 def on_load(arg):
-    mapperstorage.deserialise(db, arg['sources'], arg['destinations'], arg['loading'])
+    mapperstorage.deserialise(graph, arg['sources'], arg['destinations'], arg['loading'])
 
-def select_network(newNetwork):
-    global db
-    networkInterfaces['active'] = newNetwork
-    net = mapper.network(networkInterfaces['active'])
-    db.mapper.database(net, mapper.OBJ_DEVICES | mapper.OBJ_LINKS)
-    server.send_command('set_network', newNetwork)
+def select_interface(iface):
+    global graph
+    graph.set_interface(iface)
+    networkInterfaces['active'] = iface
+    server.send_command('set_iface', iface)
 
-def get_networks(arg):
+def get_interfaces(arg):
     location = netifaces.AF_INET    # A computer specific integer for internet addresses
     totalInterfaces = netifaces.interfaces() # A list of all possible interfaces
     connectedInterfaces = []
@@ -281,35 +224,34 @@ def get_networks(arg):
         addrs = netifaces.ifaddresses(i)
         if location in addrs:       # Test to see if the interface is actually connected
             connectedInterfaces.append(i)
-    server.send_command("available_networks", connectedInterfaces)
+    server.send_command("available_interfaces", connectedInterfaces)
     networkInterfaces['available'] = connectedInterfaces
-    server.send_command("active_network", networkInterfaces['active'])
+    server.send_command("active_interface", networkInterfaces['active'])
 
-def init_database(arg):
-    global db
-    db.subscribe(mapper.OBJ_DEVICES | mapper.OBJ_LINKS)
-    db.add_device_callback(on_device)
-    db.add_link_callback(on_link)
-    db.add_signal_callback(on_signal)
-    db.add_map_callback(on_map)
+def init_graph(arg):
+    global graph
+    graph.subscribe(mapper.DEVICE, -1)
+    graph.add_callback(on_device, mapper.DEVICE)
+    graph.add_callback(on_signal, mapper.SIGNAL)
+    graph.add_callback(on_map, mapper.MAP)
 
 server.add_command_handler("add_devices",
-                           lambda x: ("add_devices", map(dev_props, db.devices())))
+                           lambda x: ("add_devices", map(dev_props, graph.devices())))
 
 def subscribe(device):
     if device == "all_devices":
-        db.subscribe(mapper.OBJ_DEVICES | mapper.OBJ_LINKS)
+        graph.subscribe(mapper.DEVICE)
     else:
         # todo: only subscribe to inputs and outputs as needed
-        dev = db.device(device)
+        dev = graph.devices().filter('name', device).next()
         if dev:
-            db.subscribe(dev, mapper.OBJ_ALL)
+            graph.subscribe(dev, mapper.OBJECT)
 
 def find_sig(fullname):
     names = fullname.split('/', 1)
-    dev = db.device(names[0])
+    dev = graph.devices().filter('name', names[0]).next()
     if dev:
-        sig = dev.signal(names[1])
+        sig = dev.signals().filter('name', names[1]).next()
         return sig
     else:
         print 'error: could not find device', dev
@@ -332,13 +274,10 @@ def release_map(args):
 server.add_command_handler("subscribe", lambda x: subscribe(x))
 
 server.add_command_handler("add_signals",
-                           lambda x: ("add_signals", map(sig_props, db.signals())))
-
-server.add_command_handler("add_links",
-                           lambda x: ("add_links", map(link_props, db.links())))
+                           lambda x: ("add_signals", map(sig_props, graph.signals())))
 
 server.add_command_handler("add_maps",
-                           lambda x: ("add_maps", map(map_props, db.maps())))
+                           lambda x: ("add_maps", map(map_props, graph.maps())))
 
 server.add_command_handler("set_map", lambda x: set_map_properties(x))
 
@@ -346,15 +285,15 @@ server.add_command_handler("map", lambda x: new_map(x))
 
 server.add_command_handler("unmap", lambda x: release_map(x))
 
-server.add_command_handler("refresh", init_database)
+server.add_command_handler("refresh", init_graph)
 
 server.add_command_handler("save", on_save)
 server.add_command_handler("load", on_load)
 
-server.add_command_handler("select_network", select_network)
-server.add_command_handler("get_networks", get_networks)
+server.add_command_handler("select_interface", select_interface)
+server.add_command_handler("get_interfaces", get_interfaces)
 
-get_networks(False)
+get_interfaces(False)
 if ( 'en1' in networkInterfaces['available'] ) :
     networkInterfaces['active'] = 'en1'
 elif ( 'en0' in networkInterfaces['available'] ):
@@ -372,6 +311,6 @@ on_open = lambda: ()
 if not '--no-browser' in sys.argv and not '-n' in sys.argv:
     on_open = lambda: open_gui(port)
 
-server.serve(port=port, poll=lambda: db.poll(100), on_open=on_open,
+server.serve(port=port, poll=lambda: graph.poll(100), on_open=on_open,
              quit_on_disconnect=not '--stay-alive' in sys.argv)
 

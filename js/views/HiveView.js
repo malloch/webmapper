@@ -5,15 +5,15 @@
 'use strict';
 
 class HiveView extends View {
-    constructor(frame, tables, canvas, database) {
-        super('hive', frame, null, canvas, database);
+    constructor(frame, tables, canvas, graph) {
+        super('hive', frame, null, canvas, graph);
 
         // hide tables
         tables.left.adjust(0, 0, 0, frame.height, 0, 1000);
         tables.right.adjust(frame.width, 0, 0, frame.height, 0, 1000);
 
         // start with signals at origin
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             dev.signals.each(function(sig) {
                 if (sig.index && !sig.position)
                     sig.position = this.origin;
@@ -21,7 +21,7 @@ class HiveView extends View {
         });
 
         // remove link svg
-        this.database.links.each(remove_object_svg);
+        this.graph.links.each(remove_object_svg);
 
         this.pan = this.canvasPan;
         this.zoom = this.canvasZoom;
@@ -51,7 +51,7 @@ class HiveView extends View {
     drawDevices(duration) {
         let self = this;
         let listIndex = 0;
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             if (!dev.view)
                 return;
             dev.view.stop();
@@ -169,7 +169,7 @@ class HiveView extends View {
                 break;
         }
         if (elements.indexOf('devices') >= 0) {
-            let dev_num = this.database.devices.reduce(function(temp, dev) {
+            let dev_num = this.graph.devices.reduce(function(temp, dev) {
                 let uncollapsed = dev.collapsed ? 0 : 1;
                 return temp ? temp + uncollapsed : uncollapsed;
             });
@@ -194,6 +194,6 @@ class HiveView extends View {
 
     cleanup() {
         super.cleanup();
-        this.database.devices.each(function(dev) {dev.angle = null;});
+        this.graph.devices.each(function(dev) {dev.angle = null;});
     }
 }

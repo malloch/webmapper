@@ -1,6 +1,6 @@
-function SignalFilter(container, database) {
+function SignalFilter(container, graph) {
     this._container = container;
-    this.database = database;
+    this.graph = graph;
 }
 
 SignalFilter.prototype = {

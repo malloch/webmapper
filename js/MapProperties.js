@@ -1,9 +1,6 @@
-function MapProperties(container, database) {
+function MapProperties(container, graph) {
     this._container = container;
-    this.database = database;
-    this.mapModeCommands = {"Linear": 'linear', "Expression": 'expression' };
-    this.mapModes = ["Linear", "Expression"];
-    this.boundaryIcons = ["None", "Right", "Left", "Mute", "Clamp", "Wrap"];
+    this.graph = graph;
 }
 
 MapProperties.prototype = {
@@ -19,25 +16,19 @@ MapProperties.prototype = {
                 "<div id='mapPropsDiv' class='topMenuContainer'></div>"+
             "</div>");
 
-        //Add the mode controls
+        //Add the expression editor
         $('#mapPropsDiv').append(
             "<div style='width:50%'>"+
-                "<div id='modes' class='signalControl disabled' style='width:100%; padding-bottom:5px;'>Mode: </div>"+
                 "<div id='expression' class='signalControl disabled' style='width:100%; padding-top:5px;'>Expression: "+
-                    "<input type='text' id='expression 'class='expression' style='width:calc(100% - 90px)'></input>"+
+                     "<input type='text' id='expression 'class='expression' style='width:calc(100% - 90px); height: 43px'></input>"+
                 "</div>"+
             "</div>"+
             "<div id='ranges' style='width:50%'></div>");
 
-        for (var m in this.mapModes) {
-            $('#modes').append(
-                "<div class='mode' id='mode"+this.mapModes[m]+"'>"+this.mapModes[m]+"</div>");
-        }
-
         //Add the range controls
         $('#ranges').append(
             "<div id='srcRange' class='range signalControl disabled'>"+
-                "<div style='width:85px'>Src Range:</div>"+
+                "<div style='width:80px'>Src Range:</div>"+
                 "<div style='width:calc(100% - 120px)'>"+
                     "<div style='width:24px'></div>"+
                     "<input class='range' id='src_min' style='width:calc(50% - 34px)'></input>"+
@@ -45,10 +36,10 @@ MapProperties.prototype = {
                     "<input class='range' id='src_max' style='width:calc(50% - 34px)'></input>"+
                     "<div style='width:24px'></div>"+
                 "</div>"+
-                "<div id='srcCalibrate' class='calibrate'>Calib</div>"+
+                "<div id='setLinear' class='setlinear'>Linear</div>"+
             "</div>"+
             "<div id='dstRange' class='range signalControl disabled'>"+
-                "<div style='width:85px'>Dest Range:</div>"+
+                "<div style='width:80px'>Dest Range:</div>"+
                 "<div style='width:calc(100% - 120px)'>"+
                     "<div id='boundaryMin' class='boundary boundaryDown' type='button'></div>"+
                     "<input class='range' id='dst_min' style='width:calc(50% - 34px)'></input>"+
@@ -56,7 +47,7 @@ MapProperties.prototype = {
                     "<input class='range' id='dst_max' style='width:calc(50% - 34px)'></input>"+
                     "<div id='boundaryMax' class='boundary boundaryUp' type='button'></div>"+
                 "</div>"+
-//                "<div id='dstCalibrate' class='calibrate' type='button'>Calib</div>"+
+                "<div id='srcCalibrate' class='calibrate'>Calib</div>"+
             "</div>");
 
         this.addHandlers();
@@ -81,12 +72,6 @@ MapProperties.prototype = {
             click: function(e) { e.stopPropagation(); },
         }, 'input');
 
-        //For the mode buttons
-        $('.topMenu').on("click", '.mode', function(e) {
-            e.stopPropagation();
-            _self.setMapProperty("mode", e.currentTarget.innerHTML);
-        });
-
         $('.boundary').on('click', function(e) {
             _self.on_boundary(e, _self);
         });
@@ -109,9 +94,9 @@ MapProperties.prototype = {
 
     updateNetworkInterfaces : function() {
         $('#networkSelection').children('*').remove();
-        for (var i in this.database.networkInterfaces.available) {
-            let iface = this.database.networkInterfaces.available[i];
-            if (iface == this.database.networkInterfaces.selected)
+        for (var i in this.graph.networkInterfaces.available) {
+            let iface = this.graph.networkInterfaces.available[i];
+            if (iface == this.graph.networkInterfaces.selected)
                 $('#networkSelection').append("<option value='"+iface+"' selected>"+iface+"</option>");
             else
                 $('#networkSelection').append("<option value='"+iface+"'>"+iface+"</option>");
@@ -120,12 +105,12 @@ MapProperties.prototype = {
 
     // clears and disables the map properties bar
     clearMapProperties : function() {
-        $('.mode').removeClass('modesel');
         $('.topMenu input').val('');
         $('.boundary').removeAttr('class').addClass('boundary boundaryNone');
         $('.signalControl').children('*').removeClass('disabled');
         $('.signalControl').addClass('disabled');
         $('.calibrate').removeClass('calibratesel');
+        $('.setlinear').removeClass('setlinearsel');
         $('.expression').removeClass('waiting');
         $('.ranges').children('*').removeClass('waiting');
     },
@@ -137,7 +122,6 @@ MapProperties.prototype = {
     updateMapProperties : function() {
         this.clearMapProperties();
 
-        var mode = null;
         var expression = null;
         var src_min = null;
         var src_max = null;
@@ -151,12 +135,7 @@ MapProperties.prototype = {
         $('.signalControl').removeClass('disabled');
         $('.signalControl').children('*').removeClass('disabled');
 
-        this.database.maps.filter(this.selected).each(function(map) {
-            if (mode == null)
-                mode = map.mode;
-            else if (mode != map.mode)
-                mode = 'multiple'
-
+        this.graph.maps.filter(this.selected).each(function(map) {
             if (expression == null)
                 expression = map.expression;
             else if (expression != map.expression)
@@ -197,12 +176,6 @@ MapProperties.prototype = {
             else if (dst_bound_max != map.dst_bound_max)
                 dst_bound_max = 'multiple';
         });
-
-        if (mode != null && mode != 'multiple') {
-            // capitalize first letter of mode
-            mode = mode.charAt(0).toUpperCase() + mode.slice(1);
-            $("#mode"+mode).addClass("modesel");
-        }
 
         if (expression != null) {
             $(".expression").removeClass('waiting');
@@ -252,15 +225,14 @@ MapProperties.prototype = {
     // object with arguments for the map
     updateMapPropertiesFor : function(key) {
         // check if map is selected
-        var map = this.database.maps.find(key);
+        var map = this.graph.maps.find(key);
         if (this.selected(map))
             this.updateMapProperties();
     },
 
     setMapProperty : function(key, value) {
         let container = $(this._container);
-        let modes = this.mapModeCommands;
-        this.database.maps.filter(this.selected).each(function(map) {
+        this.graph.maps.filter(this.selected).each(function(map) {
             if (map[key] == value || map[key] == parseFloat(value))
                 return;
 
@@ -268,9 +240,6 @@ MapProperties.prototype = {
 
             // set the property being modified
             switch (key) {
-            case 'mode':
-                msg['mode'] = modes[value];
-                break;
             case 'srcRangeSwitch':
                 msg['src_max'] = String(map['src_min']);
                 msg['src_min'] = String(map['src_max']);
@@ -315,11 +284,6 @@ MapProperties.prototype = {
 
             default:
                 msg[key] = value;
-            }
-
-            // is expression is edited, switch to expression mode
-            if (key == 'expression' && map['mode'] != 'expression') {
-                msg['mode'] = 'expression';
             }
 
             // copy src and dst names
@@ -384,7 +348,7 @@ MapProperties.prototype = {
             // Split them into sources and destinations
             var srcdevs = [];
             var dstdevs = [];
-            this.database.devices.each(function(dev) {
+            this.graph.devices.each(function(dev) {
                 if (devs.includes(dev.name)) {
                     if (dev.num_outputs)
                         srcdevs.push(dev.name);
@@ -409,49 +373,6 @@ MapProperties.prototype = {
             form.submit();
         };
         return false;
-    },
-
-    on_boundary : function(e, _self) {
-        var boundaryMode = null;
-        for (var i in this.boundaryIcons) {
-            if ($(e.currentTarget).hasClass("boundary"+this.boundaryIcons[i])) {
-                boundaryMode = this.boundaryIcons[i];
-                break;
-            }
-        }
-        if (i >= this.boundaryIcons.length)
-            return;
-
-        var is_max = (e.currentTarget.id == 'boundaryMax');
-        switch (boundaryMode) {
-            case 'Left':
-                if (is_max)
-                    boundaryMode = 'Wrap'; // fold -> wrap
-                else
-                    boundaryMode = 'Mute'; // none -> mute
-                break;
-            case 'Right':
-                if (is_max)
-                    boundaryMode = 'Mute'; // none -> mute
-                else
-                    boundaryMode = 'Wrap'; // fold -> wrap
-                break;
-            case 'Mute':
-                boundaryMode = 'Clamp'; // mute -> clamp
-                break;
-            case 'Clamp':
-                boundaryMode = 'Fold'; // clamp -> fold
-                break;
-            case 'Wrap':
-                boundaryMode = 'None'; // wrap -> none
-                break;
-            default:
-                break;
-        }
-        if (boundaryMode != null)
-            _self.setMapProperty(is_max ? "dst_bound_max" : 'dst_bound_min',
-                                 boundaryMode);
-        e.stopPropagation();
     },
 
     notify : function(msg) {

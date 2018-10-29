@@ -297,7 +297,7 @@ def handler_page(out, args):
 
 <script type="text/javascript" src="js/util.js"></script>
 <script type="text/javascript" src="js/command.js"></script>
-<script type="text/javascript" src="js/Database.js"></script>
+<script type="text/javascript" src="js/Graph.js"></script>
 
 <!-- View includes -->
 <script type="text/javascript" src="js/ViewManager.js"></script>

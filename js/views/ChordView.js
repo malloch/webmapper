@@ -5,14 +5,14 @@
 'use strict';
 
 class ChordView extends View {
-    constructor(frame, tables, canvas, database) {
-        super('chord', frame, null, canvas, database);
+    constructor(frame, tables, canvas, graph) {
+        super('chord', frame, null, canvas, graph);
 
         // hide tables
         tables.left.adjust(0, 0, 0, frame.height, 0, 1000);
         tables.right.adjust(frame.width, 0, 0, frame.height, 0, 1000);
 
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             // remove device labels (if any)
             if (dev.view && dev.view.label)
                 dev.view.label.remove();
@@ -20,7 +20,7 @@ class ChordView extends View {
             dev.signals.each(function(sig) { remove_object_svg(sig); });
         });
         // remove associated svg elements for maps
-        this.database.maps.each(function(map) { remove_object_svg(map); });
+        this.graph.maps.each(function(map) { remove_object_svg(map); });
 
         this.pan = this.canvasPan;
         this.zoom = this.canvasZoom;
@@ -76,10 +76,10 @@ class ChordView extends View {
         let self = this;
         this.onlineDevs = 0;
         this.offlineDevs = 0;
-        let dev_num = this.database.devices.size();
+        let dev_num = this.graph.devices.size();
         if (dev_num < 1)
             return;
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             if (dev.status == 'offline')
                 self.offlineDevs++;
             else
@@ -99,7 +99,7 @@ class ChordView extends View {
 
         let cx = this.mapPane.cx;
         let cy = this.mapPane.cy;
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             let staged = false;
             let offline = (dev.status == 'offline');
 
@@ -170,7 +170,7 @@ class ChordView extends View {
                                   'y': cy + Math.sin(angle) * r};
                 self.drawDevice(dev, 500, self);
                 for (var i in dev.links) {
-                    let link = self.database.links.find(dev.links[i]);
+                    let link = self.graph.links.find(dev.links[i]);
                     if (link)
                         self.drawLink(link, 500, self);
                 }
@@ -212,7 +212,7 @@ class ChordView extends View {
                                   'y': cy + Math.sin(angle) * r};
                 self.drawDevice(dev, 500, self);
                 for (var i in dev.links) {
-                    let link = self.database.links.find(dev.links[i]);
+                    let link = self.graph.links.find(dev.links[i]);
                     if (link)
                         self.drawLink(link, 500, self);
                 }
@@ -265,7 +265,7 @@ class ChordView extends View {
 
     drawDevices(duration) {
         let self = this;
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             self.drawDevice(dev, duration, self);
         });
     }
@@ -273,10 +273,10 @@ class ChordView extends View {
     updateLinks() {
         let self = this;
         let tau = Math.PI * 2.0;
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             dev.link_angles = [];
         });
-        this.database.links.each(function(link) {
+        this.graph.links.each(function(link) {
             let src = link.src;
             let dst = link.dst;
             if (!src.view || !dst.view)
@@ -289,7 +289,7 @@ class ChordView extends View {
                 dst.link_angles.push(src.view.pstart.angle);
             }
         });
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             if (!dev.link_angles || dev.link_angles.length <= 1)
                 return;
             // sort
@@ -312,7 +312,7 @@ class ChordView extends View {
                 a.push.apply(a, a.splice(0, i));
             }
         });
-        this.database.links.each(function(link) {
+        this.graph.links.each(function(link) {
             let src = link.src;
             let dst = link.dst;
             if (!link.view) {
@@ -454,7 +454,7 @@ class ChordView extends View {
     drawLinks(duration) {
         let self = this;
 
-        this.database.links.each(function(link) {
+        this.graph.links.each(function(link) {
             self.drawLink(link, duration, self);
         });
     }
@@ -495,7 +495,7 @@ class ChordView extends View {
             this.onlineTitle.remove();
         if (this.offlineTitle)
             this.offlineTitle.remove();
-        database.links.each(function(link) {
+        graph.links.each(function(link) {
             if (!link.view)
                 return;
             if (link.view.startPoint)

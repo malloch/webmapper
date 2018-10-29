@@ -5,18 +5,18 @@
 'use strict';
 
 class GraphView extends View {
-    constructor(frame, tables, canvas, database) {
-        super('graph', frame, null, canvas, database);
+    constructor(frame, tables, canvas, graph) {
+        super('graph', frame, null, canvas, graph);
 
         // hide tables
         tables.left.adjust(0, 0, 0, frame.height, 0, 1000);
         tables.right.adjust(frame.width, 0, 0, frame.height, 0, 1000);
 
         // remove associated svg elements for devices
-        this.database.devices.each(remove_object_svg);
+        this.graph.devices.each(remove_object_svg);
 
         // remove link svg
-        this.database.links.each(remove_object_svg);
+        this.graph.links.each(remove_object_svg);
 
         this.pan = this.canvasPan;
         this.zoom = this.canvasZoom;

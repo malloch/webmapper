@@ -1,6 +1,6 @@
-function SaverLoader(container, database) {
+function SaverLoader(container, graph) {
     this._container = container;
-    this.database = database;
+    this.graph = graph;
 }
 
 SaverLoader.prototype = {

@@ -63,7 +63,7 @@ thead, #networkMenu {
     background: #EEE;
 }
 
-.calibratesel {
+.calibratesel, .setlinearsel {
     background-color: #9CC2CF;
 }
 
@@ -225,7 +225,7 @@ form {
     top: 0px;
 }
 
-.calibrate {
+.calibrate, .setlinear {
     cursor: pointer;
 }
 

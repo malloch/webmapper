@@ -5,8 +5,8 @@
 'use strict';
 
 class ConsoleView extends View {
-    constructor(frame, tables, canvas, database) {
-        super('console', frame, null, canvas, database);
+    constructor(frame, tables, canvas, graph) {
+        super('console', frame, null, canvas, graph);
 
         // hide left table
         tables.left.adjust(0, 0, 0, frame.height, 0, 1000);
@@ -15,7 +15,7 @@ class ConsoleView extends View {
         tables.right.adjust(frame.width, 0, 0, frame.height, 0, 1000);
 
         let self = this;
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             // remove signal svg
             dev.signals.each(remove_object_svg);
             // remove device svg
@@ -23,10 +23,10 @@ class ConsoleView extends View {
         });
 
         // remove link svg
-        this.database.links.each(remove_object_svg);
+        this.graph.links.each(remove_object_svg);
 
         // remove map svg
-        this.database.maps.each(remove_object_svg);
+        this.graph.maps.each(remove_object_svg);
 
         this.escaped = false;
 
@@ -60,7 +60,7 @@ class ConsoleView extends View {
                         case 'unmap':
                             if (command.length == 2) {
                                 let index = 0;
-                                self.database.maps.each(function(map) {
+                                self.graph.maps.each(function(map) {
                                     index++;
                                     if (index == command[1]) {
                                         $('#container').trigger('unmap', [map.src.key, map.dst.key]);
@@ -75,7 +75,7 @@ class ConsoleView extends View {
                         case 'select':
                             if (command.length == 2) {
                                 let index = 0;
-                                self.database.maps.each(function(map) {
+                                self.graph.maps.each(function(map) {
                                     index++;
                                     if (!map.view)
                                         return;
@@ -83,12 +83,12 @@ class ConsoleView extends View {
                                 });
                             }
                             else if (command.length == 3) {
-                                self.database.maps.each(function(map) {
+                                self.graph.maps.each(function(map) {
                                     if (map.view)
                                         map.view.selected = false;
                                 });
                                 let key = command[1]+'->'+command[1];
-                                let map = self.database.maps.find(key);
+                                let map = self.graph.maps.find(key);
                                 if (map && map.view)
                                     map.view.selected = true;
                             }
@@ -115,11 +115,11 @@ class ConsoleView extends View {
                             break;
                         case 'ls':
                             if (command.length > 1) {
-                                let dev = self.database.devices.find(command[1]);
+                                let dev = self.graph.devices.find(command[1]);
                                 if (dev) {
                                     let echo = this.echo;
                                     echo('device '+dev.name+' has '+
-                                         self.database.devices.size()+' signals:');
+                                         self.graph.devices.size()+' signals:');
                                     dev.signals.each(function(sig) {
                                         echo('  <signal> '+sig.key);
                                     });
@@ -128,8 +128,8 @@ class ConsoleView extends View {
                             else {
                                 let echo = this.echo;
                                 echo('network includes '+
-                                     self.database.devices.size()+' devices:');
-                                self.database.devices.each(function(dev) {
+                                     self.graph.devices.size()+' devices:');
+                                self.graph.devices.each(function(dev) {
                                     echo('  <device> '+dev.name);
                                 });
                             }
@@ -170,7 +170,7 @@ class ConsoleView extends View {
 //                    }
 //                    if (command[0] == 'unmap' && command.length == 2) {
 //                        let index = 0;
-//                        self.database.maps.each(function(map) {
+//                        self.graph.maps.each(function(map) {
 //                            index++;
 //                            if (index == command[1]) {
 //                                $('#container').trigger('unmap', [map.src.key, map.dst.key]);
@@ -233,7 +233,7 @@ class ConsoleView extends View {
     updateMaps() {
         let mapList = $('#mapListDiv ol');
         mapList.empty();
-        this.database.maps.each(function(map) {
+        this.graph.maps.each(function(map) {
             let string = "<li>"+map.src.key+" -> "+map.dst.key;
             for (var key in map) {
                 if (key == 'src' || key == 'dst' || key == 'key' || key == 'view')
@@ -265,7 +265,7 @@ class ConsoleView extends View {
     cleanup() {
         super.cleanup();
 
-        this.database.devices.each(function(dev) {
+        this.graph.devices.each(function(dev) {
             dev.signals.each(function(sig) {
                 if (sig.view) {
                     delete sig.view;
