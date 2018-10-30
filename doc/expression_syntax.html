@@ -1,0 +1,604 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<style>
+body {
+  font-family: Helvetica, arial, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  background-color: white;
+  padding: 30px; }
+
+body > *:first-child {
+  margin-top: 0 !important; }
+body > *:last-child {
+  margin-bottom: 0 !important; }
+
+a {
+  color: #4183C4; }
+a.absent {
+  color: #cc0000; }
+a.anchor {
+  display: block;
+  padding-left: 30px;
+  margin-left: -30px;
+  cursor: pointer;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0; }
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 20px 0 10px;
+  padding: 0;
+  font-weight: bold;
+  -webkit-font-smoothing: antialiased;
+  cursor: text;
+  position: relative; }
+
+h1:hover a.anchor, h2:hover a.anchor, h3:hover a.anchor, h4:hover a.anchor, h5:hover a.anchor, h6:hover a.anchor {
+  background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAA09pVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoMTMuMCAyMDEyMDMwNS5tLjQxNSAyMDEyLzAzLzA1OjIxOjAwOjAwKSAgKE1hY2ludG9zaCkiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6OUM2NjlDQjI4ODBGMTFFMTg1ODlEODNERDJBRjUwQTQiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6OUM2NjlDQjM4ODBGMTFFMTg1ODlEODNERDJBRjUwQTQiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDo5QzY2OUNCMDg4MEYxMUUxODU4OUQ4M0REMkFGNTBBNCIgc3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDo5QzY2OUNCMTg4MEYxMUUxODU4OUQ4M0REMkFGNTBBNCIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94cGFja2V0IGVuZD0iciI/PsQhXeAAAABfSURBVHjaYvz//z8DJYCRUgMYQAbAMBQIAvEqkBQWXI6sHqwHiwG70TTBxGaiWwjCTGgOUgJiF1J8wMRAIUA34B4Q76HUBelAfJYSA0CuMIEaRP8wGIkGMA54bgQIMACAmkXJi0hKJQAAAABJRU5ErkJggg==) no-repeat 10px center;
+  text-decoration: none; }
+
+h1 tt, h1 code {
+  font-size: inherit; }
+
+h2 tt, h2 code {
+  font-size: inherit; }
+
+h3 tt, h3 code {
+  font-size: inherit; }
+
+h4 tt, h4 code {
+  font-size: inherit; }
+
+h5 tt, h5 code {
+  font-size: inherit; }
+
+h6 tt, h6 code {
+  font-size: inherit; }
+
+h1 {
+  font-size: 28px;
+  color: black; }
+
+h2 {
+  font-size: 24px;
+  border-bottom: 1px solid #cccccc;
+  color: black; }
+
+h3 {
+  font-size: 18px; }
+
+h4 {
+  font-size: 16px; }
+
+h5 {
+  font-size: 14px; }
+
+h6 {
+  color: #777777;
+  font-size: 14px; }
+
+p, blockquote, ul, ol, dl, li, table, pre {
+  margin: 15px 0; }
+
+hr {
+  background: transparent url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAYAAAAECAYAAACtBE5DAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyJpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMC1jMDYwIDYxLjEzNDc3NywgMjAxMC8wMi8xMi0xNzozMjowMCAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNSBNYWNpbnRvc2giIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6OENDRjNBN0E2NTZBMTFFMEI3QjRBODM4NzJDMjlGNDgiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6OENDRjNBN0I2NTZBMTFFMEI3QjRBODM4NzJDMjlGNDgiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDo4Q0NGM0E3ODY1NkExMUUwQjdCNEE4Mzg3MkMyOUY0OCIgc3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDo4Q0NGM0E3OTY1NkExMUUwQjdCNEE4Mzg3MkMyOUY0OCIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94cGFja2V0IGVuZD0iciI/PqqezsUAAAAfSURBVHjaYmRABcYwBiM2QSA4y4hNEKYDQxAEAAIMAHNGAzhkPOlYAAAAAElFTkSuQmCC) repeat-x 0 0;
+  border: 0 none;
+  color: #cccccc;
+  height: 4px;
+  padding: 0;
+}
+
+body > h2:first-child {
+  margin-top: 0;
+  padding-top: 0; }
+body > h1:first-child {
+  margin-top: 0;
+  padding-top: 0; }
+  body > h1:first-child + h2 {
+    margin-top: 0;
+    padding-top: 0; }
+body > h3:first-child, body > h4:first-child, body > h5:first-child, body > h6:first-child {
+  margin-top: 0;
+  padding-top: 0; }
+
+a:first-child h1, a:first-child h2, a:first-child h3, a:first-child h4, a:first-child h5, a:first-child h6 {
+  margin-top: 0;
+  padding-top: 0; }
+
+h1 p, h2 p, h3 p, h4 p, h5 p, h6 p {
+  margin-top: 0; }
+
+li p.first {
+  display: inline-block; }
+li {
+  margin: 0; }
+ul, ol {
+  padding-left: 30px; }
+
+ul :first-child, ol :first-child {
+  margin-top: 0; }
+
+dl {
+  padding: 0; }
+  dl dt {
+    font-size: 14px;
+    font-weight: bold;
+    font-style: italic;
+    padding: 0;
+    margin: 15px 0 5px; }
+    dl dt:first-child {
+      padding: 0; }
+    dl dt > :first-child {
+      margin-top: 0; }
+    dl dt > :last-child {
+      margin-bottom: 0; }
+  dl dd {
+    margin: 0 0 15px;
+    padding: 0 15px; }
+    dl dd > :first-child {
+      margin-top: 0; }
+    dl dd > :last-child {
+      margin-bottom: 0; }
+
+blockquote {
+  border-left: 4px solid #dddddd;
+  padding: 0 15px;
+  color: #777777; }
+  blockquote > :first-child {
+    margin-top: 0; }
+  blockquote > :last-child {
+    margin-bottom: 0; }
+
+table {
+  padding: 0;border-collapse: collapse; }
+  table tr {
+    border-top: 1px solid #cccccc;
+    background-color: white;
+    margin: 0;
+    padding: 0; }
+    table tr:nth-child(2n) {
+      background-color: #f8f8f8; }
+    table tr th {
+      font-weight: bold;
+      border: 1px solid #cccccc;
+      margin: 0;
+      padding: 6px 13px; }
+    table tr td {
+      border: 1px solid #cccccc;
+      margin: 0;
+      padding: 6px 13px; }
+    table tr th :first-child, table tr td :first-child {
+      margin-top: 0; }
+    table tr th :last-child, table tr td :last-child {
+      margin-bottom: 0; }
+
+img {
+  max-width: 100%; }
+
+span.frame {
+  display: block;
+  overflow: hidden; }
+  span.frame > span {
+    border: 1px solid #dddddd;
+    display: block;
+    float: left;
+    overflow: hidden;
+    margin: 13px 0 0;
+    padding: 7px;
+    width: auto; }
+  span.frame span img {
+    display: block;
+    float: left; }
+  span.frame span span {
+    clear: both;
+    color: #333333;
+    display: block;
+    padding: 5px 0 0; }
+span.align-center {
+  display: block;
+  overflow: hidden;
+  clear: both; }
+  span.align-center > span {
+    display: block;
+    overflow: hidden;
+    margin: 13px auto 0;
+    text-align: center; }
+  span.align-center span img {
+    margin: 0 auto;
+    text-align: center; }
+span.align-right {
+  display: block;
+  overflow: hidden;
+  clear: both; }
+  span.align-right > span {
+    display: block;
+    overflow: hidden;
+    margin: 13px 0 0;
+    text-align: right; }
+  span.align-right span img {
+    margin: 0;
+    text-align: right; }
+span.float-left {
+  display: block;
+  margin-right: 13px;
+  overflow: hidden;
+  float: left; }
+  span.float-left span {
+    margin: 13px 0 0; }
+span.float-right {
+  display: block;
+  margin-left: 13px;
+  overflow: hidden;
+  float: right; }
+  span.float-right > span {
+    display: block;
+    overflow: hidden;
+    margin: 13px auto 0;
+    text-align: right; }
+
+code, tt {
+  margin: 0 2px;
+  padding: 0 5px;
+  white-space: nowrap;
+  border: 1px solid #eaeaea;
+  background-color: #f8f8f8;
+  border-radius: 3px; }
+
+pre code {
+  margin: 0;
+  padding: 0;
+  white-space: pre;
+  border: none;
+  background: transparent; }
+
+.highlight pre {
+  background-color: #f8f8f8;
+  border: 1px solid #cccccc;
+  font-size: 13px;
+  line-height: 19px;
+  overflow: auto;
+  padding: 6px 10px;
+  border-radius: 3px; }
+
+pre {
+  background-color: #f8f8f8;
+  border: 1px solid #cccccc;
+  font-size: 13px;
+  line-height: 19px;
+  overflow: auto;
+  padding: 6px 10px;
+  border-radius: 3px; }
+  pre code, pre tt {
+    background-color: transparent;
+    border: none; }
+
+sup {
+    font-size: 0.83em;
+    vertical-align: super;
+    line-height: 0;
+}
+* {
+	-webkit-print-color-adjust: exact;
+}
+@media screen and (min-width: 914px) {
+    body {
+        width: 854px;
+        margin:0 auto;
+    }
+}
+@media print {
+	table, pre {
+		page-break-inside: avoid;
+	}
+	pre {
+		word-wrap: break-word;
+	}
+}
+</style>
+<title>General Syntax</title>
+
+</head>
+<body>
+<h1>libmapper Expression Syntax</h1>
+
+<p>Connections between signals that are maintained by libmapper can be configured with
+optional signal processing described in the form of an expression.</p>
+
+<h3>General Syntax</h3>
+
+<p>Expressions in libmapper must always be presented in the form <code>y = x</code>, where <code>x</code>
+refers to the updated source value and <code>y</code> is the computed value to be forwarded
+to the destination. Sub-expressions can be used if separated by a semicolon <code>;</code>
+however a value can only be assigned to a variable once per timestep – the
+expression <code>y=x; y=x*2</code> is not allowed. Spaces may be freely used within the
+expression, they will have no effect on the generated output.</p>
+
+<h2>Available operators</h2>
+
+<h3>Arithmetic operators</h3>
+
+<ul>
+<li><code>+</code> – addition</li>
+<li><code>-</code> – subtraction</li>
+<li><code>*</code> – multiplication</li>
+<li><code>/</code> – division</li>
+<li><code>%</code> – modulo</li>
+</ul>
+
+
+<h3>Comparison operators</h3>
+
+<ul>
+<li><code>&gt;</code> – greater than</li>
+<li><code>&gt;=</code> – greater than or equal</li>
+<li><code>&lt;</code> – less than</li>
+<li><code>&lt;=</code> – less than or equal</li>
+<li><code>==</code> – equal</li>
+<li><code>!=</code> – not equal</li>
+</ul>
+
+
+<h3>Conditional operators</h3>
+
+<ul>
+<li><code>?:</code> – if / then / else (ternary operation) used in the form <code>a?b:c</code>. If the second operand is not included the first will be used in its place. If the last operand is missing (the "else" argument) the function will not generate an output if <code>a</code> is false</li>
+</ul>
+
+
+<h3>Logical operators</h3>
+
+<ul>
+<li><code>!</code> – logical <strong>NOT</strong></li>
+<li><code>&amp;&amp;</code> – logical <strong>AND</strong></li>
+<li><code>||</code> – logical <strong>OR</strong></li>
+</ul>
+
+
+<h3>Bitwise operators</h3>
+
+<ul>
+<li><code>&lt;&lt;</code> – left bitshift</li>
+<li><code>&gt;&gt;</code> – right bitshift</li>
+<li><code>&amp;</code> – bitwise <strong>AND</strong></li>
+<li><code>|</code> – bitwise <strong>OR</strong></li>
+<li><code>^</code> – bitwise <strong>XOR</strong></li>
+</ul>
+
+
+<h2>Available Functions</h2>
+
+<h3>Absolute value:</h3>
+
+<ul>
+<li><code>abs(x)</code> — absolute value</li>
+</ul>
+
+
+<h3>Exponential functions:</h3>
+
+<ul>
+<li><code>exp(x)</code> — returns e raised to the given power</li>
+<li><code>exp2(x)</code> — returns 2 raised to the given power</li>
+<li><code>log(x)</code> — computes natural ( base e ) logarithm ( to base e )</li>
+<li><code>log10(x)</code> — computes common ( base 10 ) logarithm</li>
+<li><code>log2(x)</code> – computes the binary ( base 2 ) logarithm</li>
+<li><code>logb(x)</code> — extracts exponent of the number</li>
+</ul>
+
+
+<h3>Power functions:</h3>
+
+<ul>
+<li><code>sqrt(x)</code> — square root</li>
+<li><code>cbrt(x)</code> — cubic root</li>
+<li><code>hypot(x, n)</code> — square root of the sum of the squares of two given numbers</li>
+<li><code>pow(x, n)</code> — raise a to the power b</li>
+</ul>
+
+
+<h3>Trigonometric functions:</h3>
+
+<ul>
+<li><code>sin(x)</code> — sine</li>
+<li><code>cos(x)</code> — cosine</li>
+<li><code>tan(x)</code> — tangent</li>
+<li><code>asin(x)</code> — arc sine</li>
+<li><code>acos(x)</code> — arc cosine</li>
+<li><code>atan(x)</code> — arc tangent</li>
+<li><code>atan2(x, n)</code> — arc tangent, using signs to determine quadrants</li>
+</ul>
+
+
+<h3>Hyperbolic functions:</h3>
+
+<ul>
+<li><code>sinh(x)</code> — hyperbolic sine</li>
+<li><code>cosh(x)</code> — hyperbolic cosine</li>
+<li><code>tanh(x)</code> — hyperbolic tangent</li>
+</ul>
+
+
+<h3>Nearest integer floating point:</h3>
+
+<ul>
+<li><code>floor(x)</code> — nearest integer not greater than the given value</li>
+<li><code>round(x)</code> — nearest integer, rounding away from zero in halfway cases</li>
+<li><code>ceil(x)</code> — nearest integer not less than the given value</li>
+<li><code>trunc(x)</code> — nearest integer not greater in magnitude than the given value</li>
+</ul>
+
+
+<h3>Comparison functions:</h3>
+
+<ul>
+<li><code>min(x,y)</code> – smaller of two values</li>
+<li><code>max(x,y)</code> – greater of two values</li>
+<li><code>schmitt(x,a,b)</code> – a comparator with hysteresis (<a href="https://en.wikipedia.org/wiki/Schmitt_trigger">Schmitt trigger</a>) with input <code>x</code>, low threshold <code>a</code> and high threshold <code>b</code></li>
+</ul>
+
+
+<h3>Random number generation:</h3>
+
+<ul>
+<li><code>uniform(x)</code> — uniform random distribution between 0 and the given value</li>
+</ul>
+
+
+<h3>Conversion functions:</h3>
+
+<ul>
+<li><code>midiToHz(x)</code> — convert MIDI note value to Hz</li>
+<li><code>hzToMidi(x)</code> — convert Hz value to MIDI note</li>
+</ul>
+
+
+<h3>Vector functions</h3>
+
+<ul>
+<li><code>any(x)</code> — output <code>1</code> if <strong>any</strong> of the elements of vector <code>x</code> are non-zero, otherwise output <code>0</code></li>
+<li><code>all(x)</code> — output <code>1</code> if <strong>all</strong> of the elements of vector <code>x</code> are non-zero, otherwise output <code>0</code></li>
+<li><code>sum(x)</code> – output the sum of the elements in vector <code>x</code></li>
+<li><code>mean(x)</code> – output the average (mean) of the elements in vector <code>x</code></li>
+<li><code>max(x)</code> – output the maximum element in vector <code>x</code> (overloaded function)</li>
+<li><code>min(x)</code> – output the minimum element in vector <code>x</code> (overloaded function)</li>
+</ul>
+
+
+<h3>Filters</h3>
+
+<ul>
+<li><code>ema(x,w)</code> – a cheap low-pass filter: calculate a running <em>exponential moving average</em> with input <code>x</code> and a weight <code>w</code> applied to the current sample.</li>
+</ul>
+
+
+<h1>Vectors</h1>
+
+<p>Individual elements of variable values can be accessed using the notation
+<code>&lt;variable&gt;[&lt;index&gt;]</code>. The index specifies the vector element, and
+obviously must be <code>&gt;=0</code>. Expressions must match the vector lengths of the
+source and destination signals, and can be used to translate between
+signals with different vector lengths.</p>
+
+<h3>Vector examples</h3>
+
+<ul>
+<li><code>y = x[0]</code> — simple vector indexing</li>
+<li><code>y = x[1:2]</code> — specify a range within the vector</li>
+<li><code>y = [x[1],x[2],x[0]]</code> — rearranging vector elements</li>
+<li><code>y[1] = x</code> — apply update to a specific element of the output</li>
+<li><code>y[0:2] = x</code> — apply update to elements <code>0-2</code> of the output vector</li>
+<li><code>[y[0],y[2]] = x</code> — apply update to output vector elements <code>y[0]</code> and <code>y[2]</code> but
+leave <code>y[1]</code> unchanged.</li>
+</ul>
+
+
+<h3>Vector functions</h3>
+
+<p>There are several special functions that operate across all elements of the vector:</p>
+
+<ul>
+<li><code>any(x)</code> — output <code>1</code> if <strong>any</strong> of the elements of <code>x</code> are non-zero, otherwise output <code>0</code></li>
+<li><code>all(x)</code> — output <code>1</code> if <strong>all</strong> of the elements of <code>x</code> are non-zero, otherwise output <code>0</code></li>
+<li><code>max(x)</code> — output the largest element of the vector</li>
+<li><code>min(x)</code> — output the smallest element of the vector</li>
+</ul>
+
+
+<h1>FIR and IIR Filters</h1>
+
+<p>Past samples of expression input and output can be accessed using the notation
+<code>&lt;variable&gt;{&lt;index&gt;}</code>. The index specifies the history index in samples, and must be <code>&lt;=0</code> for the input (with <code>0</code> representing the present input sample) and <code>&lt;0</code> for the expression output ( i.e. it cannot be a value that has not been provided or computed yet ).</p>
+
+<p>Using only past samples of the expression <em>input</em> <code>x</code> we can create <strong>Finite
+Impulse Response</strong> ( FIR ) filters - here are some simple examples:</p>
+
+<ul>
+<li><code>y = x - x{-1}</code> — 2-sample derivative</li>
+<li><code>y = x + x{-1}</code> — 2-sample integral</li>
+</ul>
+
+
+<p>Using past samples of the expression <em>output</em> <code>y</code> we can create <strong>Infinite
+Impulse Response</strong> ( IIR ) filters - here are some simple examples:</p>
+
+<ul>
+<li><code>y = y{-1} * 0.9 + x * 0.1</code> — exponential moving average with current-sample-weight of <code>0.1</code></li>
+<li><code>y = y{-1} + x - 1</code> — leaky integrator with a constant leak of <code>1</code></li>
+</ul>
+
+
+<p>Note that <code>y{-n}</code> does not refer to the expression output, but rather to the <em>actual
+value</em> of the destination signal which may have been set locally or by another map
+since the last time the expression was evaluated. If you wish to reference past samples
+of the expression output you will need to cache the output using a <strong>user-defined
+variable</strong> (see below), e.g.:</p>
+
+<ul>
+<li><code>output = output + x - 1</code>;<code>y = output</code></li>
+</ul>
+
+
+<p>Of course the filter can contain references to past samples of both <code>x</code> and <code>y</code> -
+currently libmapper will reject expressions referring to sample delays <code>&gt; 100</code>.</p>
+
+<h2>Initializing filters</h2>
+
+<p>Past values of the filter output <code>y{-n}</code> can be set using additional sub-expressions, separated using semicolons:</p>
+
+<ul>
+<li><code>y = y{-1} + x</code>; <code>y{-1} = 100</code></li>
+</ul>
+
+
+<p>Filter initialization takes place the first time the expression evaluator is called
+for a given signal instance; after this point the initialization sub-expressions will
+not be evaluated. This means the filter could be initialized with the first sample of
+<code>x</code> for example:</p>
+
+<ul>
+<li><code>y = y{-1} + x</code>; <code>y{-1} = x * 2</code></li>
+</ul>
+
+
+<p>A function could also be used for initialization:</p>
+
+<ul>
+<li><code>y = y{-1} + x</code>; <code>y{-1} = uniform(1000)</code> — initialize <code>y{-1}</code> to a random value</li>
+</ul>
+
+
+<p>Any past values that are not explicitly initialized are given the value <code>0</code>.</p>
+
+<h1>User-Declared Variables</h1>
+
+<p>Up to 8 additional variables can be declared as-needed in the expression. The variable
+names can be any string except for the reserved variable names <code>x</code> and <code>y</code>.  The values
+of these variables are stored per-instance with the map context and can be accessed in
+subsequent calls to the evaluator. In the following example, the user-defined variable
+<code>ema</code> is used to keep track of the <code>exponential moving average</code> of the input signal
+value <code>x</code>, <em>independent</em> of the output value <code>y</code> which is set to give the difference
+between the current sample and the moving average:</p>
+
+<ul>
+<li><code>ema = ema{-1} * 0.9 + x * 0.1; y = x - ema</code></li>
+</ul>
+
+
+<p>Just like the output variable <code>y</code> we can initialize past values of user-defined variables before expression evaluation. <strong>Initialization will always be performed first</strong>, after which sub-expressions are evaluated <strong>in the order they are written</strong>. For example, the expression string <code>y=ema*2; ema=ema{-1}*0.9+x*0.1; ema{-1}=90</code> will be evaluated in the following order:</p>
+
+<ol>
+<li><code>ema{-1}=90</code> — initialize the past value of variable <code>ema</code> to <code>90</code></li>
+<li><code>y=ema*2</code> — set output variable <code>y</code> to equal the <strong>current</strong> value of <code>ema</code> multiplied
+by <code>2</code>. The current value of <code>ema</code> is <code>0</code> since it has not yet been set.</li>
+<li><code>ema=ema{-1}*0.9+x*0.1</code> — set the current value of <code>ema</code> using current value of <code>x</code> and the past value of <code>ema</code></li>
+</ol>
+
+</body>
+</html>

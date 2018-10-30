@@ -18,10 +18,8 @@ MapProperties.prototype = {
 
         //Add the expression editor
         $('#mapPropsDiv').append(
-            "<div style='width:50%'>"+
-                "<div id='expression' class='signalControl disabled' style='width:100%; padding-top:5px;'>Expression: "+
-                     "<input type='text' id='expression 'class='expression' style='width:calc(100% - 90px); height: 43px'></input>"+
-                "</div>"+
+            "<div id='expression' class='signalControl disabled' style='width:50%; padding-top:5px;'><a href='./doc/expression_syntax.html' target='blank' style='color:white'>Expression:</a>"+
+                "<input type='text' id='expression 'class='expression' style='width:calc(100% - 90px); height: 48px'></input>"+
             "</div>"+
             "<div id='ranges' style='width:50%'></div>");
 
