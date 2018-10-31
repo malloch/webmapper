@@ -102,7 +102,7 @@ MapperNodeArray.prototype = {
             if (this.cb_func)
                 this.cb_func('removed', this.obj_type, {'key': key});
         }
-        if (this.size() == 0)
+        if (this.obj_type == 'device' && this.size() == 0)
             Raphael.getColor.reset();
         return key;
     },

@@ -111,7 +111,7 @@ class ChordView extends View {
                 dev.index = onlineIndex++;
             let angleInc = offline ? self.offlineInc : self.onlineInc;
             let x = cx * (offline ? 1.5 : 0.5);
-            let angle = dev.index * angleInc;
+            let angle = dev.index * angleInc - angleInc * 0.45;
             let pstart = {'angle': angle,
                           'x': x + Math.cos(angle) * r,
                           'y': cy + Math.sin(angle) * r};

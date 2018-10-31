@@ -656,19 +656,20 @@ class View {
                 }
             }
             else if (src.vy != dst.vy) {
+                console.log(src.left, dst.left);
                 // draw intersection between tables
                 if (map.view)
                     map.view.attr({'arrow-end': 'none'});
                 if (src.vx < 0.0001) {
-                    return [['M', src.left, dst.y],
-                            ['L', src.left + src.width, dst.top],
-                            ['l', 0, dst.height],
+                    return [['M', src.left + 2, dst.y],
+                            ['L', src.left + src.width - 2, dst.top + 2],
+                            ['l', 0, dst.height - 2],
                             ['Z']];
                 }
                 else {
-                    return [['M', dst.x, src.top],
-                            ['L', dst.left, src.top + src.height],
-                            ['l', dst.width, 0],
+                    return [['M', dst.x, src.top + 2],
+                            ['L', dst.left + 2, src.top + src.height - 2],
+                            ['l', dst.width - 2, 0],
                             ['Z']]
                 }
             }
