@@ -88,6 +88,18 @@ MapProperties.prototype = {
             if (e.which == 77)
                 _self.setMapProperty("muted", null);
         });
+
+        $('.expr_doc_link').click(function(e) {
+            // show expression documentation
+            $('#status').stop(true, false)
+                        .empty()
+                        .load('./doc/expression_syntax.html')
+                        .css({'left': '20%',
+                              'top': 70,
+                              'width': '60%',
+                              'height': 'calc(100% - 90px)',
+                              'opacity': 0.9});
+        });
     },
 
     updateNetworkInterfaces : function() {

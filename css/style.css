@@ -489,7 +489,7 @@ tbody {
 
 #status {
     padding: 4px 6px 4px 6px;
-    vertical-align: middle;
+/*    vertical-align: middle;*/
     position: absolute;
 /*    text-align: left;*/
     color: white;
@@ -607,4 +607,12 @@ table.infoTable tr td:first-child {
 .disabled {
     opacity: 0.5 !important;
     pointer-events: none;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    margin: 0px;
+    padding: 0;
+    font-weight: bold;
+    -webkit-font-smoothing: antialiased;
+    cursor: text;
 }
