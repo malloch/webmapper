@@ -139,66 +139,71 @@ def set_map_properties(props):
     if not map:
         print "error: couldn't retrieve map ", props['src'], " -> ", props['dst']
         return
-    if props.has_key('expression'):
-        map[mapper.PROP_EXPR] = props['expression']
-    if props.has_key('muted'):
-        map[mapper.PROP_MUTED] = props['muted']
-
-    slot = map.source()
-    if props.has_key('src_min'):
-        if type(props['src_min']) is int or type(props['src_min']) is float:
-            slot.minimum = float(props['src_min'])
+    del props['src']
+    del props['dst']
+#    src = map.source()
+#    dst = map.destination()
+    for key in props:
+        print 'prop', key, props[key]
+        if key == 'expression':
+            map[mapper.PROP_EXPR] = props['expression']
+        elif key == 'muted':
+            muted = props['muted']
+            if muted == 'true' or muted == 'True' or muted == 't' or muted == 'T':
+                muted = True
+            elif muted == 'false' or muted == 'False' or muted == 'f' or muted == 'F':
+                muted = False
+            map[mapper.PROP_MUTED] = muted
+#        elif key is 'src_min':
+#            if type(props['src_min']) is int or type(props['src_min']) is float:
+#                src.minimum = float(props['src_min'])
+#            else:
+#                if type(props['src_min']) is str:
+#                    props['src_min'] = props['src_min'].replace(',',' ').split()
+#                numargs = len(props['src_min'])
+#                for i in range(numargs):
+#                    props['src_min'][i] = float(props['src_min'][i])
+#                if numargs == 1:
+#                    props['src_min'] = props['src_min'][0]
+#                src.minimum = props['src_min']
+#        elif key is 'src_max':
+#            if type(props['src_max']) is int or type(props['src_max']) is float:
+#                src.maximum = float(props['src_max'])
+#            else:
+#                if type(props['src_max']) is str:
+#                    props['src_max'] = props['src_max'].replace(',',' ').split()
+#                numargs = len(props['src_max'])
+#                for i in range(numargs):
+#                    props['src_max'][i] = float(props['src_max'][i])
+#                if numargs == 1:
+#                    props['src_max'] = props['src_max'][0]
+#                dst.maximum = props['src_max']
+#        elif key is 'dst_min':
+#            if type(props['dst_min']) is int or type(props['dst_min']) is float:
+#                dst.minimum = float(props['dst_min'])
+#            else:
+#                if type(props['dst_min']) is str:
+#                    props['dst_min'] = props['dst_min'].replace(',',' ').split()
+#                numargs = len(props['dst_min'])
+#                for i in range(numargs):
+#                    props['dst_min'][i] = float(props['dst_min'][i])
+#                if numargs == 1:
+#                    props['dst_min'] = props['dst_min'][0]
+#                dst.minimum = props['dst_min']
+#        elif key is 'dst_max':
+#            if type(props['dst_max']) is int or type(props['dst_max']) is float:
+#                dst.maximum = float(props['dst_max'])
+#            else:
+#                if type(props['dst_max']) is str:
+#                    props['dst_max'] = props['dst_max'].replace(',',' ').split()
+#                numargs = len(props['dst_max'])
+#                for i in range(numargs):
+#                    props['dst_max'][i] = float(props['dst_max'][i])
+#                if numargs == 1:
+#                    props['dst_max'] = props['dst_max'][0]
+#                dst.maximum = props['dst_max']
         else:
-            if type(props['src_min']) is str:
-                props['src_min'] = props['src_min'].replace(',',' ').split()
-            numargs = len(props['src_min'])
-            for i in range(numargs):
-                props['src_min'][i] = float(props['src_min'][i])
-            if numargs == 1:
-                props['src_min'] = props['src_min'][0]
-            slot.minimum = props['src_min']
-    if props.has_key('src_max'):
-        if type(props['src_max']) is int or type(props['src_max']) is float:
-            slot.maximum = float(props['src_max'])
-        else:
-            if type(props['src_max']) is str:
-                props['src_max'] = props['src_max'].replace(',',' ').split()
-            numargs = len(props['src_max'])
-            for i in range(numargs):
-                props['src_max'][i] = float(props['src_max'][i])
-            if numargs == 1:
-                props['src_max'] = props['src_max'][0]
-            slot.maximum = props['src_max']
-    if props.has_key('src_calibrating'):
-        slot.calibrating = props['src_calibrating']
-
-    slot = map.destination()
-    if props.has_key('dst_min'):
-        if type(props['dst_min']) is int or type(props['dst_min']) is float:
-            slot.minimum = float(props['dst_min'])
-        else:
-            if type(props['dst_min']) is str:
-                props['dst_min'] = props['dst_min'].replace(',',' ').split()
-            numargs = len(props['dst_min'])
-            for i in range(numargs):
-                props['dst_min'][i] = float(props['dst_min'][i])
-            if numargs == 1:
-                props['dst_min'] = props['dst_min'][0]
-            slot.minimum = props['dst_min']
-    if props.has_key('dst_max'):
-        if type(props['dst_max']) is int or type(props['dst_max']) is float:
-            slot.maximum = float(props['dst_max'])
-        else:
-            if type(props['dst_max']) is str:
-                props['dst_max'] = props['dst_max'].replace(',',' ').split()
-            numargs = len(props['dst_max'])
-            for i in range(numargs):
-                props['dst_max'][i] = float(props['dst_max'][i])
-            if numargs == 1:
-                props['dst_max'] = props['dst_max'][0]
-            slot.maximum = props['dst_max']
-    if props.has_key('dst_calibrating'):
-        slot.calibrating = props['dst_calibrating']
+            map[key] = props[key]
 #    print 'pushing map'
     map.push()
 

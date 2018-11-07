@@ -171,8 +171,8 @@ function ViewManager(container, graph)
                     view.update('maps');
                 break;
             case 'modified':
-                if (map.view) {
-                    if (map.view.selected)
+                if (map.view || 'console' == view.type) {
+                    if (map.selected)
                         $('#container').trigger("updateMapPropertiesFor", map.key);
                     view.update('maps');
                 }
@@ -194,7 +194,7 @@ function ViewManager(container, graph)
                 }
                 /* delete */
                 graph.maps.each(function(map) {
-                    if (map.view && map.view.selected)
+                    if (map.view && map.selected)
                         $('#container').trigger('unmap', [map.src.key, map.dst.key]);
                 });
                 deselectAllMaps(tables);
@@ -256,7 +256,7 @@ function ViewManager(container, graph)
             // check for edge intersections around point for 'click' selection
             let updated = false;
             graph.maps.each(function(map) {
-                if (!map.view || map.view.selected)
+                if (!map.view || map.selected)
                     return;
                 if (   edge_intersection(map.view, x1-3, y1-3, x1+3, y1+3)
                     || edge_intersection(map.view, x1-3, y1+3, x1+3, y1-3)) {
@@ -281,7 +281,7 @@ function ViewManager(container, graph)
                 // check for edge intersections for 'cross' selection
                 update = false;
                 graph.maps.each(function(map) {
-                    if (!map.view || map.view.selected)
+                    if (!map.view || map.selected)
                         return;
                     if (edge_intersection(map.view, x1, y1, x2, y2)) {
                         updated |= select_obj(map);

@@ -405,10 +405,12 @@ function switch_mode(newMode)
 }
 
 function select_obj(obj) {
-    if (obj.view.selected)
+    if (obj.selected)
         return false;
-    obj.view.selected = true;
-    obj.view.animate({'stroke': 'red', 'fill': 'red'}, 50);
-    obj.view.toFront();
+    obj.selected = true;
+    if (obj.view) {
+        obj.view.animate({'stroke': 'red', 'fill': 'red'}, 50);
+        obj.view.toFront();
+    }
     return true;
 }

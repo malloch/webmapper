@@ -316,9 +316,24 @@ class ChordView extends View {
             let src = link.src;
             let dst = link.dst;
             if (!link.view) {
-                link.view = self.canvas.path([['M', src.view.pstart.x,
-                                               src.view.pstart.y],
-                                              ['l', 0, 0]]);
+                let r = self.radius;
+                let angleInc;
+                if (src.status == 'offline') {
+                    if (src.draggingFrom) {
+                        r += 50;
+                        angleInc = self.onlineInc;
+                    }
+                    else
+                        angleInc = self.offlineInc;
+                }
+                else {
+                    angleInc = self.onlineInc;
+                }
+                let path = [['M', src.view.pstart.x, src.view.pstart.y],
+                            ['A', r, r, angleInc, 0, 1,
+                             src.view.pstop.x, src.view.pstop.y],
+                            ['Z']];
+                link.view = self.canvas.path(path);
             }
             link.src_index = (src.link_angles.length
                               ? src.link_angles.indexOf(dst.view.pstart.angle)
@@ -502,6 +517,7 @@ class ChordView extends View {
                 link.view.startPoint.remove();
             if (link.view.stopPoint)
                 link.view.stopPoint.remove();
+            remove_object_svg(link, 200);
         });
 
         // clean up any objects created only for this view

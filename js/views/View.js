@@ -205,11 +205,13 @@ class View {
             if (dev.tableIndices.length == 1) {
                 let row = dev.tableIndices[0];
                 let pos = self.tables[row.table].getRowFromIndex(row.index);
-                path = [['M', pos.left, pos.top],
-                        ['l', pos.width, 0],
-                        ['l', 0, pos.height],
-                        ['l', -pos.width, 0],
-                        ['Z']];
+                if (pos) {
+                    path = [['M', pos.left, pos.top],
+                            ['l', pos.width, 0],
+                            ['l', 0, pos.height],
+                            ['l', -pos.width, 0],
+                            ['Z']];
+                }
             }
             else if (self.tables.right.snap == 'left') {
                 let lrow = null, rrow = null;
@@ -291,7 +293,7 @@ class View {
                                                 "<tr><th colspan='2'>"+dev.status+" device</th></tr>"+
                                                 "<tr><td>name</td><td>"+dev.name+"</td></tr>"+
                                                 "<tr><td>signals</td><td>"+dev.signals.size()+"</td></tr>"+
-                                                "<tr><td>angle</td><td>"+((dev.view.pstart.angle + dev.view.pstop.angle) * 0.5)+"</td></tr>"+
+//                                                "<tr><td>angle</td><td>"+((dev.view.pstart.angle + dev.view.pstop.angle) * 0.5)+"</td></tr>"+
                                             "</tbody>"+
                                         "</table>")
                                 .css({'left': e.x + 20,
@@ -614,7 +616,7 @@ class View {
                 let path = pos ? [['M', pos.x, pos.y], ['l', 10, 0]] : null;
                 map.view = self.canvas.path(path);
                 map.view.attr({'stroke-dasharray': map.muted ? '-' : '',
-                               'stroke': map.view.selected ? 'red' : 'white',
+                               'stroke': map.selected ? 'red' : 'white',
                                'fill-opacity': 0,
                                'stroke-width': 2,
                                'arrow-start': 'none'});
@@ -656,7 +658,12 @@ class View {
                 }
             }
             else if (src.vy != dst.vy) {
-                console.log(src.left, dst.left);
+                // constrain positions to pane to indicate offscreen maps
+                // todo: make function
+                if (src.x < this.leftTableLeft) {
+                    // constrain to bounds
+                    // display a white dot
+                }
                 // draw intersection between tables
                 if (map.view)
                     map.view.attr({'arrow-end': 'none'});
@@ -721,7 +728,7 @@ class View {
             }
 
             let fill = (self.type == 'grid' && path.length > 3) ? 1.0 : 0.0;
-            let color = map.view.selected ? 'red' : 'white';
+            let color = map.selected ? 'red' : 'white';
             if (!path) {
                 console.log('problem generating path for map', map);
                 return;

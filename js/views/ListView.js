@@ -40,9 +40,6 @@ class ListView extends View {
             dev.view.unhover();
         });
 
-        // remove link svg
-        this.graph.links.each(remove_object_svg);
-
         this.escaped = false;
 
         this.pan = this.tablePan;
