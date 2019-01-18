@@ -137,7 +137,7 @@ class Table {
                 'left': innerLeft ? innerLeft : 0,
                 'top': 0,
                 'width': innerWidth ? innerWidth : '100%',
-                'height': '100%',
+                'height': self.frame.height - 20,
             });
             if (func)
                 func();

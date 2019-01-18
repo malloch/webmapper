@@ -9,7 +9,8 @@ class ParallelView extends View {
         super('parallel', frame, null, canvas, graph);
 
         // hide tables
-        tables.left.adjust(0, 0, 0, frame.height, 0, 1000);
+        tables.left.adjust(this.frame.width * -0.4, 0, this.frame.width * 0.35,
+                           frame.height, 0, 1000);
         tables.right.adjust(frame.width, 0, 0, frame.height, 0, 1000);
 
         // remove link svg

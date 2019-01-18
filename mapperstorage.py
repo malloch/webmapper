@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import json, re
-import mapper
+import mpr
 
 #for debugging
 import pdb
@@ -24,9 +24,9 @@ def deunicode(o):
 
 def serialise(db, device):
     new_maps = []
-    locStr = { mapper.LOC_UNDEFINED: 'undefined',
-               mapper.LOC_SOURCE: 'source',
-               mapper.LOC_DESTINATION: 'destination' }
+    locStr = { mpr.LOC_UNDEFINED: 'undefined',
+               mpr.LOC_SRC: 'source',
+               mpr.LOC_DST: 'destination' }
 
     regexx = re.compile('x([0-9]+)')
     regexy = re.compile('y([0-9]+)')
@@ -54,17 +54,15 @@ def serialise(db, device):
         if 'num_outputs' in this_map:
             del this_map['num_outputs']
 
-        for i in range(m.num_sources):
-            slot = m.source(i)
-            sig = slot.signal()
-            slot_props = slot.properties.copy()
-            slot_props['name'] = sig.device().name + '/' + sig.name
+        for i in range(m.num_signals(mpr.LOC_SRC)):
+            src = m.signal(mpr.LOC_SRC, i)
+            slot_props = {}
+            slot_props['name'] = src.device().name + '/' + src.name
             this_map['sources'].append(slot_props)
-        for i in range(m.num_destinations):
-            slot = m.destination(i)
-            sig = slot.signal()
-            slot_props = slot.properties.copy()
-            slot_props['name'] = sig.device().name + '/' + sig.name
+        for i in range(m.num_signals(mpr.LOC_DST)):
+            dst = m.signal(mpr.LOC_DST)
+            slot_props = {}
+            slot_props['name'] = dst.device().name + '/' + dst.name
             this_map['destinations'].append(slot_props)
 
         new_maps.append(this_map);
@@ -94,9 +92,9 @@ def deserialise(db, src_dev_names, dst_dev_names, mapping_json):
     else:
         print 'malformed file'
 
-    locIdx = { 'undefined': mapper.LOC_UNDEFINED,
-               'source': mapper.LOC_SOURCE,
-               'destination': mapper.LOC_DESTINATION }
+    locIdx = { 'undefined': mpr.LOC_UNDEFINED,
+               'source': mpr.LOC_SRC,
+               'destination': mpr.LOC_DST }
 
     src_dev = db.device(src_dev_names[0])
     if not src_dev:
@@ -188,7 +186,7 @@ def deserialise(db, src_dev_names, dst_dev_names, mapping_json):
             if not sigs_found:
                 continue
 
-            map = mapper.map(src_sigs[0], dst_sigs[0])
+            map = mpr.map(src_sigs[0], dst_sigs[0])
             if not map:
                 print "error creating map"
                 continue
@@ -196,7 +194,7 @@ def deserialise(db, src_dev_names, dst_dev_names, mapping_json):
             # set slot properties first
             index = 0
             for slot_props in map_props['sources']:
-                slot = map.source(index)
+                slot = map.signal(mpr.LOC_SRC, index)
                 for prop in slot_props:
                     if prop == 'name':
                         # do nothing
@@ -232,7 +230,7 @@ def deserialise(db, src_dev_names, dst_dev_names, mapping_json):
                 index += 1
             index = 0
             for slot_props in map_props['destinations']:
-                slot = map.destination(index)
+                slot = map.signal(mpr.LOC_DST, index)
                 for prop in slot_props:
                     if prop == 'name':
                         # do nothing
@@ -281,11 +279,8 @@ def deserialise(db, src_dev_names, dst_dev_names, mapping_json):
                 elif prop == 'muted':
                     map.muted = map_props['muted']
                 elif prop == 'mode':
-                    mode = map_props['mode']
-                    if mode == 'linear':
-                        map.mode = mapper.MODE_LINEAR
-                    elif mode == 'expression':
-                        map.mode = mapper.MODE_EXPRESSION
+                    # do nothing
+                    print 'skipping mode property'
                 else:
                     map.properties[prop] = map_props[prop]
 

@@ -9,7 +9,8 @@ class ChordView extends View {
         super('chord', frame, null, canvas, graph);
 
         // hide tables
-        tables.left.adjust(0, 0, 0, frame.height, 0, 1000);
+        tables.left.adjust(this.frame.width * -0.4, 0, this.frame.width * 0.35,
+                           frame.height, 0, 1000);
         tables.right.adjust(frame.width, 0, 0, frame.height, 0, 1000);
 
         this.graph.devices.each(function(dev) {
@@ -254,8 +255,8 @@ class ChordView extends View {
         dev.view.path = [['M', dev.view.pstart.x, dev.view.pstart.y],
                          ['A', r, r, angleInc, 0, 1,
                           dev.view.pstop.x, dev.view.pstop.y]];
-        dev.view.attr({'stroke-linecap': 'butt'});
-        dev.view.animate({'path': dev.view.path,
+        dev.view.attr({'stroke-linecap': 'butt'})
+                .animate({'path': dev.view.path,
                           'fill-opacity': 0,
                           'stroke-opacity': 1,
                           'stroke-width': 40,
@@ -513,10 +514,6 @@ class ChordView extends View {
         graph.links.each(function(link) {
             if (!link.view)
                 return;
-            if (link.view.startPoint)
-                link.view.startPoint.remove();
-            if (link.view.stopPoint)
-                link.view.stopPoint.remove();
             remove_object_svg(link, 200);
         });
 

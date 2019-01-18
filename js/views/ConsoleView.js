@@ -57,6 +57,7 @@ class ConsoleView extends View {
                                 this.echo('map: wrong number of arguments');
                             break;
                         case 'unmap':
+                        case 'rm':
                             if (command.length == 2) {
                                 let index = 0;
                                 self.graph.maps.each(function(map) {
