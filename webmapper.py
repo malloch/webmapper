@@ -107,31 +107,31 @@ def map_props(map):
 
 def on_device(type, dev, action):
     print "on_dev"
-    if action == mpr.ADDED or action == mpr.MODIFIED:
+    if action == mpr.OBJ_NEW or action == mpr.OBJ_MOD:
 #        print 'ON_DEVICE (added or modified)', dev_props(dev)
         server.send_command("add_devices", [dev_props(dev)])
-    elif action == mpr.REMOVED:
+    elif action == mpr.OBJ_REM:
 #        print 'ON_DEVICE (removed)', dev_props(dev)
         server.send_command("del_device", dev_props(dev))
-    elif action == mpr.EXPIRED:
+    elif action == mpr.OBJ_EXP:
 #        print 'ON_DEVICE (expired)', dev_props(dev)
         server.send_command("del_device", dev_props(dev))
 
 def on_signal(type, sig, action):
     print "on_sig"
-    if action == mpr.ADDED or action == mpr.MODIFIED:
+    if action == mpr.OBJ_NEW or action == mpr.OBJ_MOD:
 #        print 'ON_SIGNAL (added or modified)', sig_props(sig)
         server.send_command("add_signals", [sig_props(sig)])
-    elif action == mpr.REMOVED:
+    elif action == mpr.OBJ_REM:
 #        print 'ON_SIGNAL (removed)', sig_props(sig)
         server.send_command("del_signal", sig_props(sig))
 
 def on_map(type, map, action):
     print "on_map"
-    if action == mpr.ADDED or action == mpr.MODIFIED:
+    if action == mpr.OBJ_NEW or action == mpr.OBJ_MOD:
 #        print 'ON_MAP (added or modified)', map_props(map)
         server.send_command("add_maps", [map_props(map)])
-    elif action == mpr.REMOVED:
+    elif action == mpr.OBJ_REM:
 #        print 'ON_MAP (removed)', map_props(map)
         server.send_command("del_map", map_props(map))
 
