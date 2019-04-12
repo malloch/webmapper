@@ -501,8 +501,8 @@ class SignalTable {
         var tree = {"branches": {}, "num_leaves": 0};
         this.graph.devices.each(function(dev) {
             if (dev.hidden) return;
-            if (_self.direction == 'output' && dev.num_outputs < 1) return;
-            else if (_self.direction == 'input' && dev.num_inputs < 1) return;
+            if (_self.direction == 'output' && dev.num_sigs_out < 1) return;
+            else if (_self.direction == 'input' && dev.num_sigs_in < 1) return;
 
             let num_dev_sigs = 0;
             let sigs = [];

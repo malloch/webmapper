@@ -42,24 +42,6 @@ class ConsoleView extends View {
                                    "<div id='consoleHistory'></div>"+
                                "</div>");
 
-//        function printdevice(terminal, dev)
-//        {
-//            printf(" └─ ");
-//            mapper_device_print(dev);
-//        }
-//
-//        function printlink(terminal, link)
-//        {
-//            printf(" └─ ");
-//            mapper_link_print(link);
-//        }
-//
-//        function printmap(terminal, map)
-//        {
-//            printf(" └─ ");
-//            mapper_map_print(map);
-//        }
-
         jQuery(function($, undefined) {
             $('#consoleHistory').terminal(function(command) {
                 if (command === '')
@@ -128,10 +110,10 @@ class ConsoleView extends View {
                                             case 'link_angles':
                                             case 'index':
                                             case 'numVisibleSigs':
-                                            case 'num_incoming_maps':
-                                            case 'num_outgoing_maps':
-                                            case 'num_inputs':
-                                            case 'num_outputs':
+                                            case 'num_maps_in':
+                                            case 'num_maps_out':
+                                            case 'num_sigs_in':
+                                            case 'num_sigs_out':
                                             case 'num_links':
                                             case 'status':
                                             case 'synced':
@@ -148,11 +130,11 @@ class ConsoleView extends View {
                                         else
                                             s += s2;
                                     }
-                                    s += ' sigs: ['+dev['num_inputs']+' in, '+dev['num_outputs']+' out];';
-                                    s += ' maps: ['+dev['num_incoming_maps']+' in, '+dev['num_outgoing_maps']+' out];';
+                                    s += ' sigs: ['+dev['num_sigs_in']+' in, '+dev['num_sigs_out']+' out];';
+                                    s += ' maps: ['+dev['num_maps_in']+' in, '+dev['num_maps_out']+' out];';
                                     echo(s);
                                 }
-                                let sigCount = dev['num_inputs'] + dev['num_outputs'];
+                                let sigCount = dev['num_sigs_in'] + dev['num_sigs_out'];
                                 if (showSignals && sigCount > 0) {
                                     dev.signals.each(function (sig) {
                                         sigCount -= 1;
@@ -174,8 +156,8 @@ class ConsoleView extends View {
                                                     case 'view':
                                                     case 'index':
                                                     case 'num_maps':
-                                                    case 'num_incoming_maps':
-                                                    case 'num_outgoing_maps':
+                                                    case 'num_maps_in':
+                                                    case 'num_maps_out':
                                                     case 'position':
                                                     case 'direction':
                                                     case 'type':
@@ -190,7 +172,7 @@ class ConsoleView extends View {
                                                         s += " "+key+": "+sig[key]+";";
                                                 }
                                             }
-                                            s += ' maps: ['+sig['num_incoming_maps']+' in, '+sig['num_outgoing_maps']+' out]; ';
+                                            s += ' maps: ['+sig['num_maps_in']+' in, '+sig['num_maps_out']+' out]; ';
                                             echo(s);
                                         }
                                     });
@@ -365,10 +347,10 @@ class ConsoleView extends View {
                 }
             }, {
                 greetings: '',
-                name: 'mapper_console',
+                name: 'mpr_console',
                 height: '100%',
                 width: '100%',
-                prompt: 'mapper> ',
+                prompt: 'mpr> ',
                 completion: function(string, callback) {
                     let match = [];
                     if (string.indexOf('/') < 0) {

@@ -420,9 +420,9 @@ class MapProperties {
             var dstdevs = [];
             this.graph.devices.each(function(dev) {
                 if (devs.includes(dev.name)) {
-                    if (dev.num_outputs)
+                    if (dev.num_sigs_out)
                         srcdevs.push(dev.name);
-                    if (dev.num_inputs)
+                    if (dev.num_sigs_in)
                         dstdevs.push(dev.name);
                 }
             });

@@ -516,7 +516,7 @@ class GraphView extends View {
                 }
             });
             // repel signal positions
-            let nSig = (devA['num_outputs'] + devA['num_inputs']) * 0.25;
+            let nSig = (devA['num_sigs_out'] + devA['num_sigs_in']) * 0.25;
             devA.signals.each(function(sigA) {
                 if (!sigA.view || sigA.view.hidden || !sigA.target)
                     return;

@@ -46,7 +46,7 @@ def dev_props(dev):
     props = dev.properties.copy()
     if 'synced' in props:
         props['synced'] = props['synced'].get_double()
-    props['key'] = dev.name
+    props['key'] = dev['name']
     props['status'] = 'active'
     if 'is_local' in props:
         del props['is_local']
@@ -66,6 +66,12 @@ def sig_props(sig):
         props['direction'] = 'input'
     else:
         props['direction'] = 'output'
+    if props['type'] == mpr.INT32:
+        props['type'] = 'i'
+    elif props['type'] == mpr.FLT:
+        props['type'] = 'f'
+    elif props['type'] == mpr.DBL:
+        props['type'] = 'd'
     return props
 
 def full_signame(sig):
@@ -267,7 +273,7 @@ def find_sig(fullname):
 
 def new_map(args):
     if find_sig(args[0]) and find_sig(args[1]):
-        map = mapper.map(find_sig(args[0]), find_sig(args[1]))
+        map = mpr.map(find_sig(args[0]), find_sig(args[1]))
         if not map:
             print 'error: failed to create map', args[0], "->", args[1]
             return;

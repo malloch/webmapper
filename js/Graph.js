@@ -20,15 +20,15 @@ function is_equal(one, two) {
     return one == two
 }
 
-function MapperNodeArray(obj_type, cb_func) {
+function NodeArray(obj_type, cb_func) {
     this.contents = {};
     this.obj_type = obj_type;
     this.cb_func = cb_func;
 };
 
-MapperNodeArray.prototype = {
+NodeArray.prototype = {
     filter : function(func) {
-        let key, obj = new MapperNodeArray(this.obj_type, null);
+        let key, obj = new NodeArray(this.obj_type, null);
         for (key in this.contents) {
             if (func(this.contents[key]))
                 obj.add(this.contents[key]);
@@ -81,7 +81,7 @@ MapperNodeArray.prototype = {
         }
         else {
             if (this.obj_type == 'device') {
-                obj.signals = new MapperNodeArray('signal', this.cb_func);
+                obj.signals = new NodeArray('signal', this.cb_func);
 
                 // create hue hash
                 hueHash = function(str) {
@@ -140,15 +140,15 @@ MapperNodeArray.prototype = {
     }
 };
 
-function MapperEdgeArray(obj_type, cb_func) {
+function EdgeArray(obj_type, cb_func) {
     this.contents = {};
     this.obj_type = obj_type;
     this.cb_func = cb_func;
 };
 
-MapperEdgeArray.prototype = {
+EdgeArray.prototype = {
     filter : function(func) {
-        let key, obj = new MapperEdgeArray(this.obj_type, null);
+        let key, obj = new EdgeArray(this.obj_type, null);
         for (key in this.contents) {
             if (func(this.contents[key])) {
                 obj.add(this.contents[key]);
@@ -226,7 +226,7 @@ MapperEdgeArray.prototype = {
     },
 };
 
-function MapperGraph() {
+function Graph() {
     callbacks = [];
     this.add_callback = function(f) {
         callbacks.push(f);
@@ -240,9 +240,9 @@ function MapperGraph() {
         callbacks = [];
     };
 
-    this.devices = new MapperNodeArray('device', this.cb_handler);
-    this.links = new MapperEdgeArray('link', this.cb_handler);
-    this.maps = new MapperEdgeArray('map', this.cb_handler);
+    this.devices = new NodeArray('device', this.cb_handler);
+    this.links = new EdgeArray('link', this.cb_handler);
+    this.maps = new EdgeArray('map', this.cb_handler);
 
     this.networkInterfaces = {'selected': null, 'available': []};
 
