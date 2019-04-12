@@ -1,16 +1,8 @@
-function SignalFilter(container, graph) {
-    this._container = container;
-    this.graph = graph;
-}
-
-SignalFilter.prototype = {
-    // Initialize the Top Menu Bar Component
-    init : function() {
-        var _self = this;   // to pass to context of THIS to event handlers
-
-//        $(this._container).empty();        // clear the container DIV
-
-        $(this._container).append(
+class SignalFilter{
+    constructor(container, graph, viewmanager) {
+        this.container = container;
+        this.graph = graph;
+        $(this.container).append(
             "<div id='signalFilterDiv' class='topMenu' style='width:calc(25% - 75px);'>"+
                 "<div class='topMenuTitle'><strong>FILTER</strong></div>"+
                 "<div class='topMenuContainer'>"+
@@ -22,5 +14,12 @@ SignalFilter.prototype = {
                     "</div>"+
                 "</div>"+
             "</div>");
-    },
-};
+        
+        let self = this;
+        $('#srcSearch, #dstSearch').on('input', function(e) {
+            e.stopPropagation();
+            let id = e.currentTarget.id;
+            viewmanager.filterSignals(id, $('#'+id).val());
+        });
+    }
+}

@@ -5,53 +5,53 @@
 'use strict';
 
 class ListView extends View {
-    constructor(frame, tables, canvas, graph) {
+    constructor(frame, tables, canvas, graph, tooltip) {
         super('list', frame, {'left': tables.left, 'right': tables.right},
-              canvas, graph);
+              canvas, graph, tooltip, ListMapPainter);
+
+        this.setup();
+    }
+
+    setup() {
+        this.setMapPainter(ListMapPainter);
+        this.setTableDrag();
 
         // set left table properties
         this.tables.left.filterByDirection('output');
-        this.tables.left.showDetail(true);
 
         // set right table properties
         this.tables.right.snap = 'left';
         this.tables.right.filterByDirection('input');
-        this.tables.right.showDetail(true);
+
+        // set global table properties
+        for (var i in this.tables) {
+            let t = this.tables[i];
+            t.hidden = false;
+            t.showDetail(true);
+            t.expand = false;
+            t.scrolled = 0;
+            t.zoomed = 1;
+            t.update();
+        }
 
         let self = this;
         this.graph.devices.each(function(dev) {
-            // remove signal svg
             dev.signals.each(remove_object_svg);
-
             if (!dev.view)
                 return;
-            // remove device labels
-            if (dev.view.label) {
-                dev.view.label.remove();
-                dev.view.label = null;
-            }
-            // change device click
-            dev.view.unclick().click(function(e) {
-                dev.collapsed ^= 3;
-                self.updateDevices();
-                self.draw(1000);
-            });
-            // change device hover
             dev.view.unhover();
+            remove_object_svg(dev);
         });
+
+        this.tables.left.collapseHandler = function() {self.drawMaps()};
+        this.tables.right.collapseHandler = function() {self.drawMaps()};
 
         this.escaped = false;
 
-        this.pan = this.tablePan;
-        this.zoom = this.tableZoom;
-
-        this.resize(null, 1000);
+        this.resize(null, 500);
     }
 
-    resize(newFrame, duration) {
-        if (newFrame)
-            this.frame = newFrame;
-
+    _resize(duration) {
         let self = this;
         this.tables.left.adjust(0, 0, this.frame.width * 0.4, this.frame.height, 0,
                                 duration);
@@ -63,11 +63,9 @@ class ListView extends View {
         this.mapPane.height = this.frame.height;
         this.mapPane.cx = this.frame.width * 0.5;
         this.mapPane.cy = this.frame.height * 0.5;
-        this.draw();
     }
 
     draw(duration) {
-        this.drawDevices(duration);
         this.drawMaps(duration);
     }
 
@@ -84,11 +82,27 @@ class ListView extends View {
                 elements = arguments;
                 break;
         }
-        if (elements.indexOf('devices') >= 0 || elements.indexOf('signals') >= 0)
+        let updated = false;
+        if (elements.indexOf('devices') >= 0 || elements.indexOf('signals') >= 0) {
             this.updateDevices();
-        if (elements.indexOf('maps') >= 0)
+            updated = true;
+        }
+        if (elements.indexOf('maps') >= 0) {
             this.updateMaps();
-        this.draw(1000);
+            updated = true;
+        }
+        if (updated)
+            this.draw(500);
+    }
+
+    pan(x, y, delta_x, delta_y) {
+        if (this.tablePan(x, y, delta_x, delta_y))
+            this.drawMaps();
+    }
+
+    zoom(x, y, delta) {
+        if (this.tableZoom(x, y, delta))
+            this.drawMaps();
     }
 
     cleanup() {
@@ -102,5 +116,64 @@ class ListView extends View {
                 }
             });
         });
+    }
+}
+
+class ListMapPainter extends MapPainter
+{
+    constructor(map, canvas)
+    {
+        super(map, canvas);
+    }
+
+    updatePaths()
+    {
+        let src = this.map.src.position;
+        let dst = this.map.dst.position;
+
+        if (!src.y || !dst.y) {
+            this.hide();
+            return;
+        }
+        this.show();
+
+        if (Math.abs(src.x - dst.x) < 1)
+            this.vertical(src, dst);
+        else if (Math.abs(src.y - dst.y) < 1)
+            this.horizontal(src, dst);
+        else this.betweenTables(src, dst);
+    }
+
+    betweenTables(src, dst) 
+    {
+        let mpx = (src.x + dst.x) * 0.5;
+        this.pathspecs[0] = [['M', src.x, src.y],
+                             ['C', mpx, src.y, mpx, dst.y, dst.x, dst.y]];
+    }
+
+    vertical(src, dst) 
+    {
+        // signals are inline vertically
+        let minoffset = 30;
+        let maxoffset = 200;
+        let offset = Math.abs(src.y - dst.y) * 0.5;
+        if (offset > maxoffset) offset = maxoffset;
+        if (offset < minoffset) offset = minoffset;
+        let ctlx = src.x + offset * src.vx;
+        this.pathspecs[0] = [['M', src.x, src.y], 
+                             ['C', ctlx, src.y, ctlx, dst.y, dst.x, dst.y]];
+    }
+
+    horizontal(src, dst) 
+    {
+        // signals are inline horizontally
+        let minoffset = 30;
+        let maxoffset = 200;
+        let offset = Math.abs(src.x - dst.x) * 0.5;
+        if (offset > maxoffset) offset = maxoffset;
+        if (offset < minoffset) offset = minoffset;
+        let ctly = src.y + offset * src.vy;
+        this.pathspecs[0] = [['M', src.x, src.y],
+                             ['C', src.x, ctly, dst.x, ctly, dst.x, dst.y]];
     }
 }

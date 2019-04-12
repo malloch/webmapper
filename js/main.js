@@ -1,58 +1,97 @@
 "use strict";
-var graph = new MapperGraph();
+var graph = new Graph();
 
-var view;                       // holds the current view object
-var viewIndex;                  // index of current view
-var viewData = new Array(3);    // data specific to the view, change 3 the number of views
-
+var viewManager;
 var mapProperties;
 var devFilter;
 var saverLoader;
 var viewSelector;
-
-var input;
+var tooltip;
 
 window.onload = init;           // Kick things off
 
 /* The main program. */
 function init() {
+    // suppress right click context menu
+    $('body').attr('oncontextmenu',"return false;");     
+
     // add the top menu wrapper
     $('body').append("<div class=propertiesDiv id='TopMenuWrapper'></div>");
 
     // add the view wrapper
     $('body').append("<div id='container'></div>");
-    $('body').append("<div id='status'></div>");
-    $('body').append("<div id='axes'></div>");
-    $('body').attr('oncontextmenu',"return false;");     // ?
+    $('body').append("<div id='axes'>"+
+                        "<div id='fdgCtl'>"+
+                            "<div id='dampingSlider'>"+
+                                "<div id='dampingSliderHandle' class='ui-slider-handle'></div>"+
+                                "<span class='sliderTitle'>Damping:</span>"+
+                            "</div>"+
+                            "<div id='repulsionSlider'>"+
+                                "<div id='repulsionSliderHandle' class='ui-slider-handle'></div>"+
+                                "<span class='sliderTitle'>Signal repulsion:</span>"+
+                            "</div>"+
+                            "<div id='targetAttractionSlider'>"+
+                                "<div id='targetAttractionHandle' class='ui-slider-handle'></div>"+
+                                "<span class='sliderTitle'>Target attraction:</span>"+
+                            "</div>"+
+                            "<div id='devAttractionSlider'>"+
+                                "<div id='devAttractionHandle' class='ui-slider-handle'></div>"+
+                                "<span class='sliderTitle'>Device attraction:</span>"+
+                            "</div>"+
+                            "<div id='devDistanceSlider'>"+
+                                "<div id='devDistanceHandle' class='ui-slider-handle'></div>"+
+                                "<span class='sliderTitle'>Device distance:</span>"+
+                            "</div>"+
+                            "<div id='mapAttractionSlider'>"+
+                                "<div id='mapAttractionHandle' class='ui-slider-handle'></div>"+
+                                "<span class='sliderTitle'>Map attraction:</span>"+
+                            "</div>"+
+                            "<div id='mapLengthSlider'>"+
+                                "<div id='mapLengthHandle' class='ui-slider-handle'></div>"+
+                                "<span class='sliderTitle'>Map length:</span>"+
+                            "</div>"+
+                        "</div>"+
+                        "<div id='yAxis'>"+
+                            "<div id='yAxisMax'></div>"+
+                            "<div id='yAxisLabel' class='axisLabel'></div>"+
+                            "<table id='yAxisMenu' class='dropdown-content'></table>"+
+                            "<div id='yAxisMin'></div>"+
+                        "</div>"+
+                        "<div id='xAxis'>"+
+                            "<div id='xAxisMin'></div>"+
+                            "<div id='xAxisLabel' class='axisLabel'></div>"+
+                            "<table id='xAxisMenu' class='dropdown-content'></table>"+
+                            "<div id='xAxisMax'></div>"+
+                        "</div>"+
+                     "</div>");
+
+    // init the view
+    $('#container').empty();
+    tooltip = new Tooltip();
+    viewManager = new ViewManager(document.getElementById('container'), graph,
+                                  tooltip);
 
     // init the top menu
     $('#TopMenuWrapper').empty()
-    saverLoader = new SaverLoader(document.getElementById("TopMenuWrapper"));
-    saverLoader.init();
-    viewSelector = new ViewSelector(document.getElementById("TopMenuWrapper"));
-    viewSelector.init();
+    saverLoader = new SaverLoader(document.getElementById("TopMenuWrapper"),
+                                  graph, viewManager);
+    viewSelector = new ViewSelector(document.getElementById("TopMenuWrapper"),
+                                    viewManager);
     devFilter = new SignalFilter(document.getElementById("TopMenuWrapper"),
-                                 graph);
-    devFilter.init();
+                                 graph, viewManager);
     mapProperties = new MapProperties(document.getElementById("TopMenuWrapper"),
-                                      graph);
-    mapProperties.init();
+                                      graph, viewManager);
 
     // init controller
     initMonitorCommands();
     initViewCommands();
     initMapPropertiesCommands();
 
-//    window.onresize = function (e) {
-//        console.log('main.on_resize()');
-//        view.on_resize();
-//    };
-
     let resizing = false;
     window.onresize = function (e) {
         if (!resizing) {
             window.requestAnimationFrame(function() {
-                view.on_resize();
+                viewManager.on_resize();
                 resizing = false;
             });
             resizing = true;
@@ -66,7 +105,8 @@ function init() {
         function() {
             switch (index) {
             case 0:
-                switch_mode('new');
+                viewManager.on_resize();
+                mapProperties.clearMapProperties();
                 command.start();
                 command.send('refresh');
                 command.send('get_interfaces');
@@ -103,68 +143,35 @@ function initMonitorCommands() {
  */
 function initViewCommands()
 {
-    $('.viewButton').on("mousedown", function(e) {
-        switch ($(this)[0].id) {
-            case "listButton":
-                view.switch_view("list");
-                break;
-            case "canvasButton":
-                view.switch_view("canvas");
-                break;
-            case "graphButton":
-                view.switch_view("graph");
-                break;
-            case "gridButton":
-                view.switch_view("grid");
-                break;
-            case "hiveButton":
-                view.switch_view("hive");
-                break;
-            case "parallelButton":
-                view.switch_view("parallel");
-                break;
-            case "balloonButton":
-                view.switch_view("balloon");
-                break;
-            case "linkButton":
-                view.switch_view("link");
-                break;
-            case "chordButton":
-                view.switch_view("chord");
-                break;
-            case "consoleButton":
-                view.switch_view("console");
-                break;
-        }
-        $('.viewButton').removeClass("viewButtonsel");
-        $(this).addClass("viewButtonsel");
-    });
-
-    // TODO: add "save as" option
-    $('#saveButton').on('click', function(e) {
-        e.stopPropagation();
-        let file = graph.exportFile();
-        if (!file)
-            return;
-
-        let link = document.createElement('a');
-        let blob = new Blob([JSON.stringify(file, null, '\t')]);
-        let url = URL.createObjectURL(blob);
-        link.href = url;
-        link.setAttribute('download', 'mapping.json');
-        link.click();
-    });
-
-    $('#loadButton').click(function(e) {
-        e.stopPropagation();
-        input.trigger("click"); // open dialog
-    });
-
     $('body').on('keydown.list', function(e) {
-        if (e.metaKey != true)
+        if (e.metaKey != true) {
+            switch (e.which) {
+                case 37:
+                    // pan left
+                    e.preventDefault();
+                    viewManager.pan(null, null, 10, 0);
+                    break;
+                case 39:
+                    // pan right
+                    e.preventDefault();
+                    viewManager.pan(null, null, -10, 0);
+                    break;
+                case 38:
+                    // pan up
+                    e.preventDefault();
+                    viewManager.pan(null, null, 0, 10);
+                    break;
+                case 40:
+                    // pan down
+                    e.preventDefault();
+                    viewManager.pan(null, null, 0, -10);
+                    break;
+            }
             return;
+        }
 
         let new_view = null;
+                 let mp;
         switch (e.which) {
             case 49:
                 /* 1 */
@@ -200,28 +207,33 @@ function initViewCommands()
                 break;
             case 79:
                 e.preventDefault();
-                input.trigger("click");
+                saverLoader.fileOpenDialog();
                 break;
+            case 83:
+                e.preventDefault();
+                saverLoader.save();
             case 48:
                 e.preventDefault();
-                view.resetPanZoom();
+                viewManager.resetPanZoom();
                 break;
-//            default:
+            case 187:
+                // decrease zoom
+                e.preventDefault();
+                mp = viewManager.view.mapPane;
+                viewManager.zoom(mp.cx, mp.cy, -10);
+                break;
+            case 189:
+                // increase zoom
+                e.preventDefault();
+                mp = viewManager.view.mapPane;
+                viewManager.zoom(mp.cx, mp.cy, 10);
+                break;
+            default:
 //                console.log('key:', e.which);
         }
         if (new_view) {
-            view.switch_view(new_view);
-            $('.viewButton').removeClass("viewButtonsel");
-            $('#'+new_view+'Button').addClass("viewButtonsel");
+            viewManager.switch_view(new_view);
         }
-    });
-
-    $('#container').on('updateView', function(e) {
-        view.draw();
-    });
-
-    $('#container').on('scrolll', function(e) {
-        view.draw(0);
     });
 
     let wheeling = false;
@@ -241,53 +253,20 @@ function initViewCommands()
         if (!wheeling) {
             window.requestAnimationFrame(function() {
                 if (zooming) {
-                    view.zoom(pageX, pageY, deltaY);
+                    viewManager.zoom(pageX, pageY, deltaY);
                 }
                 else {
-                    view.pan(pageX, pageY, deltaX, deltaY);
+                    viewManager.pan(pageX, pageY, deltaX, deltaY);
                 }
                 wheeling = false;
             });
         }
         wheeling = true;
-    });
+    }, {passive: false});
+}
 
-    // Search function boxes
-    $('#srcSearch, #dstSearch').on('input', function(e) {
-        e.stopPropagation();
-        let id = e.currentTarget.id;
-        view.filterSignals(id, $('#'+id).val());
-    });
-
-    // from list view
-    // requests links and maps from the selected device (tab)
-    $("#container").on("tab", function(e, tab){
-        if (tab != 'All Devices') {
-            // retrieve linked destination devices
-            graph.links.each(function(link) {
-                if (tab == link.src)
-                    command.send('subscribe', link.dst);
-                else if (tab == link.dst)
-                    command.send('subscribe', link.src);
-            });
-            command.send('subscribe', tab);
-        }
-    });
-
-    // map command
-    // src = "devicename/signalname"
-    // dst = "devicename/signalname"
-    $("#container").on("map", function(e, src, dst, args) {
-        command.send('map', [src, dst, args]);
-    });
-
-    // unmap command
-    // src = "devicename/signalname"
-    // dst = "devicename/signalname"
-    $("#container").on("unmap", function(e, src, dst) {
-        command.send('unmap', [src, dst]);
-    });
-
+// allows anyone to call updateMapProperties by triggering an event on #container
+function initMapPropertiesCommands() {
     // asks the view for the selected maps and updates the edit bar
     $("#container").on("updateMapProperties", function(e) {
         mapProperties.updateMapProperties();
@@ -297,120 +276,12 @@ function initViewCommands()
     $("#container").on("updateMapPropertiesFor", function(e, key) {
         mapProperties.updateMapPropertiesFor(key);
     });
-
-    // asks the view for the save button link (based on the active device)
-    // currently implemented in List view only
-    $("#container").on("updateSaveLocation", function(e) {
-        mapProperties.updateSaveLocation(view.get_save_location());
-    });
-
-    input = $(document.createElement("input"));
-    input.attr("type", "file");
-    input.on('change', function(e) {
-        var f = e.target.files[0];
-        let reader = new FileReader();
-        reader.onload = (function(file) {
-            return function(e) {
-                let parsed = tryParseJSON(e.target.result);
-                if (!parsed || !parsed.fileversion || !parsed.mapping) {
-                    console.log("error: invalid file");
-                    reader.abort();
-                    return;
-                }
-                if (parsed.fileversion == "2.2") {
-                    if (!parsed.mapping.maps || !parsed.mapping.maps.length) {
-                        console.log("error: no maps in file");
-                        reader.abort();
-                        return;
-                    }
-                }
-                else if (parsed.fileversion == "2.1") {
-                    if (   !parsed.mapping.connections
-                        || !parsed.mapping.connections.length) {
-                        console.log("error: no maps in file");
-                        reader.abort();
-                        return;
-                    }
-                }
-                else {
-                    console.log("error: unsupported fileversion",
-                                parsed.fileversion);
-                    reader.abort();
-                    return;
-                }
-                graph.loadFile(parsed);
-                view.switch_view("chord");
-            };
-        })(f);
-        reader.readAsText(f);
-    });
-}
-
-function initMapPropertiesCommands()
-{
-    $("#TopMenuWrapper").on("setMap", function(e, args) {
-        command.send('set_map', args);
-    });
-    $("#TopMenuWrapper").on("refreshAll", function(e) {
-        refresh_all();
-    });
-    $("#TopMenuWrapper").on("selectInterface", function(e, iface) {
-        command.send('select_interface', iface);
-    });
-}
-
-function refresh_all() {
-    graph.clearAll();
-    command.send('refresh');
-}
-
-/**
- * Called by the view selector to change the current view
- */
-function switch_mode(newMode)
-{
-    if (view) {
-        // save view settings
-        if (typeof view.save_view_settings == 'function')
-            viewData[viewIndex] = view.save_view_settings();
-        
-        // tell the view to cleanup (ex: removing event listeners)
-        view.cleanup();
-    }
-    
-    $('#container').empty();
-    switch (newMode) {
-        case 'classic':
-            view = new listView(graph);
-            viewIndex = 0;
-            view.init();
-            break;
-        case 'new':
-            view = new ViewManager(document.getElementById('container'), graph);
-            viewIndex = 3;
-            view.init();
-            view.on_resize();
-            break;
-        default:
-            //console.log(newMode);
-    }
-
-//    // load view settings (if any)
-//    if (viewData[viewIndex]) {
-//        if (typeof view.load_view_settings == 'function')
-//            view.load_view_settings(viewData[viewIndex]);
-//    }
-
-    mapProperties.clearMapProperties();
 }
 
 function select_obj(obj) {
     if (obj.selected)
         return false;
     obj.selected = true;
-    if (obj.view) {
-        obj.view.animate({'stroke': 'red', 'fill': 'red'}, 50);
-        obj.view.toFront();
-    }
+    obj.view.draw(0);
     return true;
 }

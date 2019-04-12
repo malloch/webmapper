@@ -134,7 +134,7 @@ function line_line_intersect(x1, y1, x2, y2, x3, y3, x4, y4) {
     let m1 = (x1 == x2) ? 1000000 : (y1 - y2) / (x1 - x2);
     let m2 = (x3 == x4) ? 1000000 : (y3 - y4) / (x3 - x4);
     if (m1 == m2) {
-            // lines are parallel - todo check if same b, overlap
+        // lines are parallel - todo check if same b, overlap
         return false;
     }
     let b1 = y1 - x1 * m1;
@@ -185,14 +185,19 @@ function constrain(obj, bounds, border) {
     else if (obj.left > (bounds.left + bounds.width - obj.width * 0.5 - border))
         obj.left = bounds.left + bounds.width - obj.width * 0.5 - border;
     if (obj.top < (bounds.top + obj.height * 0.5 + border))
-        obj.top = obj.height * 0.5 + border;
+        obj.top = bounds.top + obj.height * 0.5 + border;
     else if (obj.top > (bounds.top + bounds.height - obj.height * 0.5 - border))
         obj.top = bounds.top + bounds.height - obj.height * 0.5 - border;
 }
 
-function labelwidth(label) {
-    return label.length * 8;
-}
+// from https://stackoverflow.com/questions/1582534/calculating-text-width
+function textWidth(text, mult) {
+    var calc = '<span style="display:none">' + text + '</span>';
+    $('body').append(calc);
+    var width = $('body').find('span:last').width();
+    $('body').find('span:last').remove();
+    return mult ? width * mult : width;
+};
 
 function labeloffset(start, label) {
     return {'x': start.x + label.length * 4 + 3,
@@ -237,165 +242,67 @@ function self_path(x1, y1, x2, y2, frame) {
             ['S', mp[0], mp[1], x2, y2]];
 }
 
-function canvas_rect_path(dim) {
-    let path = [['M', dim.left - dim.width * 0.5, dim.top],
-                ['l', dim.width, 0]];
-    return path;
-}
-
-function canvas_bezier(map, table, table_x) {
-    let src_x, src_y, dst_x, dst_y;
-    let src_cx = null, dst_cx = null;
-    if (map.src.canvas_object) {
-        let o = map.src.canvas_object
-        let offset = o.width * 0.5 + 10;
-        src_x = o.left + offset;
-        src_cx = o.left + offset * 3;
-        src_y = o.top;
-    }
-    else {
-        let o = table.getRowFromName(map.src.key);
-        if (!o)
-            return;
-        src_x = table_x;
-        src_y = o.cy;
-    }
-    if (map.dst.canvas_object) {
-        let o = map.dst.canvas_object
-        let offset = o.width * -0.5 - 10;
-        dst_x = o.left + offset;
-        dst_cx = o.left + offset * 3;
-        dst_y = o.top;
-    }
-    else {
-        let o = table.getRowFromName(map.dst.key);
-        if (!o)
-            return;
-        dst_x = table_x;
-        dst_y = o.cy;
-    }
-    if (!src_cx && !dst_cx)
-        src_cx = dst_cx = Math.sqrt(Math.abs(src_y - dst_y)) * 2 + table_x;
-    else if (!src_cx)
-        src_cx = (src_x + dst_x) * 0.5;
-    else if (!dst_cx)
-        dst_cx = (src_x + dst_x) * 0.5;
-
-    return [['M', src_x, src_y],
-            ['C', src_cx, src_y, dst_cx, dst_y, dst_x, dst_y]];
-}
-
-function grid_path(row, col, frame) {
-    if (row && col) {
-        return [['M', col.left, col.top],
-                ['l', col.width, 0],
-                ['L', col.left + col.width, row.top],
-                ['L', row.left + row.width, row.top],
-                ['l', 0, row.height],
-                ['L', col.left + col.width, row.top + row.height],
-                ['L', col.left + col.width, col.top + col.height],
-                ['l', -col.width, 0],
-                ['L', col.left, row.top + row.height],
-                ['L', row.left, row.top + row.height],
-                ['l', 0, -row.height],
-                ['L', col.left, row.top],
-                ['z']];
-    }
-    else if (row)
-        return [['M', 0, row.top],
-                ['l', frame.width, 0],
-                ['l', 0, row.height],
-                ['l', -frame.width, 0],
-                ['Z']];
-    else if (col)
-        return [['M', col.left, 0],
-                ['l', col.width, 0],
-                ['l', 0, frame.height],
-                ['l', -col.width, 0],
-                ['Z']];
-    return null;
-}
-
-function list_path(src, dst, connect, frame) {
-    if (src && dst && connect) {
-        let mp = frame.width * 0.5;
-        return [['M', src.left, src.top],
-                ['l', src.width, 0],
-                ['C', mp, src.top, mp, dst.top, dst.left, dst.top],
-                ['l', dst.width, 0],
-                ['l', 0, dst.height],
-                ['l', -dst.width, 0],
-                ['C', mp, dst.top + dst.height, mp, src.top + src.height,
-                 src.left + src.width, src.top + src.height],
-                ['l', -src.width, 0],
-                ['Z']];
-    }
-    let path = [];
-    if (src) {
-        path.push(['M', src.left, src.top],
-                  ['l', src.width, 0],
-                  ['l', 0, src.height],
-                  ['l', -src.width, 0],
-                  ['Z']);
-    }
-    if (dst) {
-        path.push(['M', dst.left, dst.top],
-                  ['l', dst.width, 0],
-                  ['l', 0, dst.height],
-                  ['l', -dst.width, 0],
-                  ['Z']);
-    }
-    return path;
-}
-
 function remove_object_svg(obj, duration) {
     if (!obj.view)
         return;
-    if (!duration)
+    if (duration == null)
         duration = 1000;
     if (obj.view.label) {
         obj.view.label.stop();
-        obj.view.label.animate({'stroke-opacity': 0, 'fill-opacity': 0},
-                               duration, 'linear', function() { this.remove(); });
+        if (duration)
+            obj.view.label.animate({'stroke-opacity': 0, 'fill-opacity': 0},
+                                   duration, 'linear', function() { this.remove(); });
+        else
+            obj.view.label.remove();
         obj.view.label = null;
+    }
+    if (obj.view.startPoint) {
+        obj.view.startPoint.stop();
+        obj.view.startPoint.unhover();
+        obj.view.startPoint.undrag();
+        if (duration)
+            obj.view.startPoint.animate({'opacity': 0},
+                                        duration, 'linear', function() { this.remove(); });
+        else
+            obj.view.startPoint.remove();
+        obj.view.startPoint = null;
+    }
+    if (obj.view.stopPoint) {
+        obj.view.stopPoint.stop();
+        obj.view.stopPoint.unhover();
+        obj.view.stopPoint.undrag();
+        if (duration)
+            obj.view.stopPoint.animate({'opacity': 0},
+                                       duration, 'linear', function() { this.remove(); });
+        else
+            obj.view.stopPoint.remove();
+        obj.view.stopPoint = null;
     }
     obj.view.stop();
     obj.view.unhover();
     obj.view.undrag();
-    if (obj.maps) {
-        // currently can't fade out SVG gradients so remove links immediately
-        obj.view.remove();
-    }
-    else {
+    if (duration)
         obj.view.animate({'stroke-opacity': 0, 'fill-opacity': 0},
                          duration, 'linear', function() { this.remove(); });
-    }
+    else
+        obj.view.remove();
     obj.view = null;
 }
 
 function position(x, y, frame) {
-    return { 'x': x != null ? x : Math.random() * frame.width,
-             'y': y != null ? y : Math.random() * frame.height };
+    return { 'x': x != null ? x : frame.left,
+             'y': y != null ? y : frame.top };
 }
 
 function select_all_maps() {
     let updated = false;
     graph.maps.each(function(map) {
-        if (!map.view || map.selected)
-            return;
-        if (map.view.attr('stroke-opacity') > 0) {
-            map.view.animate({'stroke': 'red'}, 50);
-            map.selected = true;
-            updated = true;
-        }
-        if (map.view.attr('fill-opacity') > 0) {
-            map.view.animate({'fill': 'red'}, 50);
-            map.selected = true;
-            updated = true;
-        }
+        if (map.selected) return;
+        map.selected = true;
+        if (map.view) map.view.draw(0);
+        updated = true;
     });
-    if (updated)
-        $('#container').trigger("updateMapProperties");
+    if (updated) $('#container').trigger("updateMapProperties");
 }
 
 function deselectAllMaps(tables) {
@@ -408,14 +315,12 @@ function deselectAllMaps(tables) {
 
     let updated = false;
     graph.maps.each(function(map) {
-        if (map.view && map.selected) {
-            map.view.animate({'stroke': 'white', 'fill': 'white'}, 50);
-            updated = true;
-        }
+        if (!map.selected) return;
         map.selected = false;
+        if (map.view) map.view.draw(0);
+        updated = true;
     });
-    if (updated)
-        $('#container').trigger("updateMapProperties");
+    if (updated) $('#container').trigger("updateMapProperties");
 }
 
 function polarDiff(angle1, angle2, fullscale = Math.PI * 2.0) {
@@ -434,4 +339,42 @@ function polarMean(angle1, angle2, fullscale = Math.PI * 2.0) {
     if (Math.abs(angle1 - angle2) > halfscale)
         mean += halfscale;
     return mean;
+}
+
+function fuzzyEq(val1, val2, epsilon) {
+    return Math.abs(val1 - val2) < epsilon;
+}
+
+function namespaceSort(a, b) {
+    // sanity check
+    if (a.indexOf('.') < 0 || a.indexOf('.') < 0)
+        return a < b ? -1 : (a > b ? 1 : 0);
+    // tokenize by slash
+    a = a.split('/');
+    b = b.split('/');
+    // extract ordinal from name
+    let ord_a, ord_b;
+    [a[0], ord_a] = a[0].split('.');
+    [b[0], ord_b] = b[0].split('.');
+    if (a[0] != b[0])
+        return a[0] < b[0] ? -1 : (a[0] > b[0] ? 1 : 0);
+    if (ord_a != ord_b) {
+        ord_a = parseInt(ord_a);
+        ord_b = parseInt(ord_b);
+        return ord_a < ord_b ? -1 : (ord_a > ord_b ? 1 : 0);
+    }
+    // device name and ordinal match, compare signal name
+    a = a.slice(1).join('/');
+    b = b.slice(1).join('/');
+    return a < b ? -1 : (a > b ? 1 : 0);
+}
+
+function stringToInt(str) {
+    str = str.toLowerCase();
+    let val = 0;
+    for (var i = 0; i < str.length; i++) {
+        let normCharCode = (str.charCodeAt(i) - 0x0030) / 0x004A;
+        val += normCharCode * Math.pow(10, 1-i);
+    }
+    return val;
 }

@@ -9,15 +9,14 @@
 // cleanup() // called when view is destroyed
 // type() // returns view type
 
-'use strict';
-
 class View {
-    constructor(type, frame, tables, canvas, graph) {
+    constructor(type, frame, tables, canvas, graph, tooltip, painter) {
         this.type = type;
         this.frame = frame;
         this.tables = tables,
         this.canvas = canvas;
         this.graph = graph;
+        this.tooltip = tooltip;
 
         this.srcregexp = null;
         this.dstregexp = null;
@@ -27,26 +26,9 @@ class View {
         this.snappingTo = null;
         this.escaped = false;
 
+        this.animationTime = 500;
+
         this.newMap = null;
-
-        this.dragObj = 'map';
-
-        // normalized table positions & dimensions
-        this.leftTableLeft = 0;
-        this.leftTableTop = 0;
-        this.leftTableWidth = 0;
-        this.leftTableHeight = 1;
-        this.leftTableAngle = 0;
-
-        this.rightTableLeft = 1;
-        this.rightTableTop = 0;
-        this.rightTableWidth = 0;
-        this.rightTableHeight = 1;
-        this.rightTableAngle = 0;
-
-        if (tables) {
-            this.setTableDrag();
-        }
 
         this.mapPane = {'left': frame.left,
                         'top': frame.top,
@@ -56,44 +38,38 @@ class View {
                         'cy': this.frame.height * 0.5
         };
 
-        this.svgZoom = 1;
-        this.svgPosX = 0;
-        this.svgPosY = 0;
+        this.canvas.zoom = 1;
+        this.canvas.pan = {x: 0, y: 0};
 
         this.xAxis = null;
         this.yAxis = null;
 
         this.canvas.setViewBox(0, 0, frame.width, frame.height, false);
-        $('#status').text('');
-
-        // remove tableIndices from last view
-        let self = this;
-        this.graph.devices.each(function(dev) {
-            dev.signals.each(function(sig) {
-                if (sig.tableIndices) {
-                    delete sig.tableIndices;
-                    sig.tableIndices = null;
-                }
-            });
-        });
+        this.tooltip.hide(true);
 
         this.origin = [this.mapPane.cx, this.mapPane.cy];
 
         this.sigLabel = null;
 
-        // default to arrowheads on maps
-        this.graph.maps.each(function(map) {
-            if (map.view)
-                map.view.attr({'arrow-end': 'block-wide-long'});
-        });
-
-        this.update();
+        if (typeof painter === "undefined")
+            this.setMapPainter(MapPainter);
+        else
+            this.setMapPainter(painter);
     }
 
-    resize(newFrame) {
+    // Subclasses should override the behavior of _resize rather than this one
+    resize(newFrame, duration) {
+        if (duration === undefined)
+            duration = this.animationTime;
         if (newFrame)
             this.frame = newFrame;
+        this._resize(duration);
+        this.canvas.setViewBox(0, 0, this.frame.width, this.frame.height, false);
+        this.draw(duration);
+    }
 
+    // Define subclass specific resizing related tasks
+    _resize() {
         this.mapPane = {'left': this.frame.left,
                         'top': this.frame.top,
                         'width': this.frame.width,
@@ -102,23 +78,11 @@ class View {
                         'cy': this.frame.height * 0.5};
 
         this.origin = [this.mapPane.cx, this.mapPane.cy];
-
-        this.draw(0);
-    }
-
-    tableIndices(key, direction) {
-        let rows = [];
-        for (var i in this.tables) {
-            let s = this.tables[i].getRowFromName(key, direction);
-            if (s)
-                rows.push({'table': i, 'index': s.index});
-        }
-        return rows.length ? rows : null;
     }
 
     updateDevices(func) {
         for (var i in this.tables)
-            this.tables[i].update(this.frame.height);
+            this.tables[i].update();
 
         let self = this;
         let devIndex = 0;
@@ -126,32 +90,25 @@ class View {
             // update device signals
             let sigIndex = 0;
             dev.signals.each(function(sig) {
+                sig.hidden = (dev.hidden == true);
                 let regexp = sig.direction == 'output' ? self.srcregexp : self.dstregexp;
-                if (regexp && !regexp.test(sig.key)) {
+                if (dev.hidden || (regexp && !regexp.test(sig.key))) {
                     remove_object_svg(sig);
                     sig.index = null;
                     return;
                 }
                 sig.index = sigIndex++;
 
-                if (self.tables) {
-                    // TODO: check if signalRep exists (e.g. canvas view)
-                    sig.tableIndices = self.tableIndices(sig.key, sig.direction);
-                    remove_object_svg(sig);
-                }
-                else {
-                    sig.tableIndices = null;
-                    if (!sig.view) {
-                        sig.view = self.canvas.path(circle_path(0, self.frame.height, 0))
-                                              .attr({'fill-opacity': 0,
-                                                     'stroke-opacity': 0});
-                        self.setSigDrag(sig);
-                        self.setSigHover(sig);
-                    }
+                if (!sig.view) {
+                    sig.view = self.canvas.path(circle_path(0, self.frame.height, 0))
+                                          .attr({'fill-opacity': 0,
+                                                 'stroke-opacity': 0});
+                    self.setSigDrag(sig);
+                    self.setSigHover(sig);
                 }
             });
             // if no signals visible, hide device also
-            if (!sigIndex) {
+            if (dev.hidden || !sigIndex) {
                 remove_object_svg(dev);
                 dev.index = null;
                 return;
@@ -159,15 +116,6 @@ class View {
 
             dev.index = devIndex++;
             dev.numVisibleSigs = sigIndex + 1;
-            if (self.tables) {
-                dev.tableIndices = self.tableIndices(dev.key);
-                if (!dev.tableIndices) {
-                    remove_object_svg(dev);
-                    return;
-                }
-            }
-            else
-                dev.tableIndices = null;
 
             if (func && func(dev)) {
                 remove_object_svg(dev);
@@ -177,105 +125,20 @@ class View {
             if (!dev.view) {
                 let path = [['M', self.frame.left + 50, self.frame.height - 50],
                             ['l', 0, 0]];
+                let color = Raphael.hsl(dev.hue, 1, 0.5);
                 dev.view = self.canvas.path().attr({'path': path,
-                                                    'fill': dev.color,
-                                                    'stroke': dev.color,
+                                                    'fill': color,
+                                                    'stroke': color,
                                                     'fill-opacity': 0,
                                                     'stroke-opacity': 0,
-                                                    'stroke-linecap': 'round'
-                                                   });
-                dev.view.click(function(e) {
-                    dev.collapsed ^= 3;
-                    // TODO: hide signals
-                    self.updateDevices();
-                    self.draw(200);
-                });
+                                                    'stroke-linecap': 'round'});
             }
         });
     }
 
-    drawDevices(duration) {
-        let self = this;
-        let cx = this.frame.cx;
-        this.graph.devices.each(function(dev) {
-            if (!dev.view || !dev.tableIndices || !dev.tableIndices.length)
-                return;
-            dev.view.stop();
-            let path = null;
-            if (dev.tableIndices.length == 1) {
-                let row = dev.tableIndices[0];
-                let pos = self.tables[row.table].getRowFromIndex(row.index);
-                if (pos) {
-                    path = [['M', pos.left, pos.top],
-                            ['l', pos.width, 0],
-                            ['l', 0, pos.height],
-                            ['l', -pos.width, 0],
-                            ['Z']];
-                }
-            }
-            else if (self.tables.right.snap == 'left') {
-                let lrow = null, rrow = null;
-                let temp = dev.tableIndices[0];
-                if (temp.table == 'left')
-                    lrow = self.tables.left.getRowFromIndex(temp.index);
-                else
-                    rrow = self.tables.right.getRowFromIndex(temp.index);
-                temp = dev.tableIndices[1];
-                if (temp.table == 'right')
-                    rrow = self.tables.right.getRowFromIndex(temp.index);
-                else
-                    lrow = self.tables.left.getRowFromIndex(temp.index);
-                if (!lrow || !rrow)
-                    return;
-                // draw curve linking left and right tables
-                path = [['M', lrow.left, lrow.top],
-                        ['l', lrow.width, 0],
-                        ['C', cx, lrow.top, cx, rrow.top, rrow.left, rrow.top],
-                        ['l', rrow.width, 0],
-                        ['l', 0, rrow.height],
-                        ['l', -rrow.width, 0],
-                        ['C', cx, rrow.bottom, cx, lrow.bottom,
-                         lrow.right, lrow.bottom],
-                        ['l', -lrow.width, 0],
-                        ['Z']];
-            }
-            else {
-                let lrow = null, trow = null;
-                let temp = dev.tableIndices[0];
-                if (temp.table == 'left')
-                    lrow = self.tables.left.getRowFromIndex(temp.index);
-                else
-                    trow = self.tables.right.getRowFromIndex(temp.index);
-                temp = dev.tableIndices[1];
-                if (temp.table == 'right')
-                    trow = self.tables.right.getRowFromIndex(temp.index);
-                else
-                    lrow = self.tables.left.getRowFromIndex(temp.index);
-                if (!lrow || !trow)
-                    return;
-                // draw "cross" extending from left and top tables
-                path = [['M', lrow.left, lrow.top],
-                        ['L', trow.left, lrow.top],
-                        ['L', trow.left, trow.top],
-                        ['L', trow.right, trow.top],
-                        ['L', trow.right, lrow.top],
-                        ['L', self.frame.right, lrow.top],
-                        ['L', self.frame.right, lrow.bottom],
-                        ['L', trow.right, lrow.bottom],
-                        ['L', trow.right, self.frame.bottom],
-                        ['L', trow.left, self.frame.bottom],
-                        ['L', trow.left, lrow.bottom],
-                        ['L', lrow.left, lrow.bottom],
-                        ['Z']];
-            }
-            if (path) {
-                dev.view.toBack();
-                dev.view.animate({'path': path,
-                                  'fill': dev.color,
-                                  'fill-opacity': 0.5,
-                                  'stroke-opacity': 0}, duration, '>');
-            }
-        });
+    drawDevices() {
+        // don't draw devices or signals by default
+        // e.g. because you're using a signal table
     }
 
     setDevHover(dev) {
@@ -284,28 +147,26 @@ class View {
         dev.view.unhover();
         dev.view.hover(
             function(e) {
-                if (!hovered && !dev.view.label) {
-                    // show label
-                    $('#status').stop(true, false)
-                                .empty()
-                                .append("<table class=infoTable>"+
-                                            "<tbody>"+
-                                                "<tr><th colspan='2'>"+dev.status+" device</th></tr>"+
-                                                "<tr><td>name</td><td>"+dev.name+"</td></tr>"+
-                                                "<tr><td>signals</td><td>"+dev.signals.size()+"</td></tr>"+
-//                                                "<tr><td>angle</td><td>"+((dev.view.pstart.angle + dev.view.pstop.angle) * 0.5)+"</td></tr>"+
-                                            "</tbody>"+
-                                        "</table>")
-                                .css({'left': e.x + 20,
-                                      'top': e.y,
-                                      'opacity': 1});
-                    if (self.type == 'chord')
-                        dev.view.toFront()
+                if (!hovered) {
+                    self.tooltip.showTable(
+                        dev.status+" device", {
+                            name: dev.name,
+                            signals: dev.signals.size()
+                        }, e.x, e.y);
+                    if (self.type == 'chord') {
+                        // also move associated  links to front
+                        self.graph.links.each(function(link) {
+                            if (link.view && (link.src == dev || link.dst == dev))
+                                link.view.toFront();
+                        });
+                        dev.view.toFront();
+                    }
                     dev.view.animate({'stroke-width': 50}, 0, 'linear');
+                    if (dev.view.label)
+                        dev.view.label.toFront();
                 }
                 hovered = true;
                 self.hoverDev = dev;
-                console.log('set hoverDev to', self.hoverDev);
                 if (self.draggingFrom == null)
                     return;
                 else if (dev == self.draggingFrom) {
@@ -317,13 +178,11 @@ class View {
             function() {
                 self.snappingTo = null;
                 if (!self.draggingFrom) {
-                    $('#status').stop(true, false)
-                                .animate({opacity: 0}, {duration: 2000});
+                    self.tooltip.hide();
                     dev.view.animate({'stroke-width': 40}, 500, 'linear');
                     hovered = false;
                 }
                 self.hoverDev = null;
-                console.log('set hoverDev to', self.hoverDev);
             }
         );
     }
@@ -333,30 +192,25 @@ class View {
         link.view.unhover();
         link.view.hover(
             function(e) {
-                // show label
-                $('#status').stop(true, false)
-                            .empty()
-                            .append("<table class=infoTable>"+
-                                        "<tbody>"+
-                                            "<tr><th colspan='2'>"+link.status+" link</th></tr>"+
-                                            "<tr><td>source</td><td>"+link.src.key+"</td></tr>"+
-                                            "<tr><td>destination</td><td>"+link.dst.key+"</td></tr>"+
-                                        "</tbody>"+
-                                    "</table>")
-                            .css({'left': e.x + 20,
-                                  'top': e.y,
-                                  'opacity': 1});
+                self.tooltip.showTable(
+                    link.status+" link", {
+                        source: link.src.key,
+                        destination: link.dst.key
+                    }, e.x, e.y);
                 link.view.toFront().animate({'stroke-width': 1}, 0, 'linear');
                 link.src.view.toFront();
+                if (link.src.view.label)
+                    link.src.view.label.toFront();
                 if (link.src.staged)
                     link.src.staged.view.toFront();
                 link.dst.view.toFront();
+                if (link.dst.view.label)
+                    link.dst.view.label.toFront();
                 if (link.dst.staged)
                     link.dst.staged.view.toFront();
             },
             function() {
-                $('#status').stop(true, false)
-                            .animate({opacity: 0}, {duration: 2000});
+                self.tooltip.hide();
                 link.view.animate({'stroke-width': 0}, 0, 'linear');
             }
         );
@@ -382,11 +236,9 @@ class View {
             if (link.view)
                 return;
             link.view = self.canvas.path();
-            let rgb = Raphael.getRGB(src.color);
             let gradient = [];
-            gradient[0] = '0-rgba('+rgb.r+','+rgb.g+','+rgb.b+',';
-            rgb = Raphael.getRGB(dst.color);
-            gradient[1] = ')-rgba('+rgb.r+','+rgb.g+','+rgb.b+',';
+            gradient[0] = '0-hsla('+src.hue+',1,0.5,';
+            gradient[1] = ')-hsla('+dst.hue+',1,0.5,';
 
             link.view.attr({'fill': gradient[0]+0.25+gradient[1]+0.25+')',
                             'stroke-opacity': 0});
@@ -406,30 +258,58 @@ class View {
             function() {
                 if (!sig.view.label) {
                     // show label
-                    let type = String.fromCharCode(sig.type);
+                    let type;
+                    switch (sig.type) {
+                        case 'i':
+                            type = 'int';
+                            break;
+                        case 'f':
+                            type = 'float';
+                            break;
+                        case 'd':
+                            type = 'double';
+                            break;
+                        default:
+                            type = '?';
+                            break;
+                    }
                     let typestring = sig.length > 1 ? type+'['+sig.length+']' : type;
-                    let minstring = sig.min != null ? sig.min : '';
-                    let maxstring = sig.max != null ? sig.max : '';
-                    $('#status').stop(true, false)
-                                .empty()
-                                .append("<table class=infoTable>"+
-                                            "<tbody>"+
-                                                "<tr><th colspan='2'>"+sig.device.status+" signal</th></tr>"+
-                                                   "<tr><td>name</td><td>"+sig.key+"</td></tr>"+
-                                                   "<tr><td>direction</td><td>"+sig.direction+"</td></tr>"+
-                                        "<tr><td>type</td><td>"+typestring+"</td></tr>"+
-                                        "<tr><td>unit</td><td>"+sig.unit+"</td></tr>"+
-                                        "<tr><td>minimum</td><td>"+minstring+"</td></tr>"+
-                                        "<tr><td>maximum</td><td>"+maxstring+"</td></tr>"+
-                                           "</tbody>"+
-                                        "</table>")
-                                .css({'left': sig.position.x + 20,
-                                      'top': sig.position.y + 70,
-                                      'opacity': 1});
+                    function parseMaybeVector(val) {
+                        if (val === null || typeof val === 'undefined')
+                            return '';
+                        if (Array.isArray(val)) {
+                            // check if values are uniform
+                            for (let i = 1; i < val.length; i++) {
+                                if (val[i] != val[0])
+                                    return val;
+                            }
+                            return val[0];
+                        }
+                        return val;
+                    }
+                    let minstring = parseMaybeVector(sig.min);
+                    let maxstring = parseMaybeVector(sig.max);
+                    let x, y;
+                    if (Array.isArray(sig.position)) {
+                       x = sig.position[0].x;
+                       y = sig.position[0].y;
+                    }
+                    else {
+                       x = sig.position.x;
+                       y = sig.position.y;
+                    }
+                    self.tooltip.showTable(
+                        sig.device.status+" signal", {
+                            name: sig.key,
+                            direction: sig.direction,
+                            type: typestring,
+                            unit: sig.unit,
+                            minimum: minstring,
+                            maximum: maxstring,
+                        }, x, y);
                     sig.view.animate({'stroke-width': 15}, 0, 'linear');
                 }
                 self.hoverDev = sig.device;
-                console.log('set hoverDev to', self.hoverDev);
                 if (self.draggingFrom == null)
                     return;
                 else if (sig == self.draggingFrom) {
@@ -438,7 +318,11 @@ class View {
                 }
                 self.snappingTo = sig;
                 let src = self.draggingFrom.position;
+                if (!src.x && src[0].x)
+                    src = src[0];
                 let dst = sig.position;
+                if (!dst.x && dst[0].x)
+                    dst = dst[0];
                 let path = [['M', src.x, src.y],
                             ['S', (src.x + dst.x) * 0.6, (src.y + dst.y) * 0.4,
                              dst.x, dst.y]];
@@ -448,11 +332,9 @@ class View {
             },
             function() {
                 self.snappingTo = null;
-                $('#status').stop(true, false)
-                            .animate({opacity: 0}, {duration: 2000});
+                self.tooltip.hide();
                 sig.view.animate({'stroke-width': 6}, 50, 'linear');
                 self.hoverDev = null;
-                console.log('set hoverDev to', self.hoverDev);
             }
         );
     }
@@ -461,8 +343,7 @@ class View {
         let self = this;
         sig.view.mouseup(function() {
             if (self.draggingFrom && self.snappingTo)
-                $('#container').trigger('map', [self.draggingFrom.key,
-                                                self.snappingTo.key]);
+                mapper.map(self.draggingFrom.key, self.snappingTo.key);
         });
         sig.view.undrag();
         sig.view.drag(
@@ -475,13 +356,16 @@ class View {
                 x -= self.frame.left;
                 y -= self.frame.top;
                 let src = self.draggingFrom.position;
+                if (!src.x && src[0].x)
+                    src = src[0];
                 let path = [['M', src.x, src.y],
                             ['S', (src.x + x) * 0.6, (src.y + y) * 0.4, x, y]];
                 if (!self.newMap) {
                     self.newMap = self.canvas.path(path);
                     self.newMap.attr({'stroke': 'white',
-                                      'stroke-width': 2,
+                                      'stroke-width': MapPath.strokeWidth,
                                       'stroke-opacity': 1,
+                                      'fill': 'none',
                                       'arrow-start': 'none',
                                       'arrow-end': 'block-wide-long'});
                 }
@@ -512,7 +396,7 @@ class View {
                 // check regexp
                 let regexp = (sig.direction == 'output'
                               ? self.srcregexp : self.dstregexp);
-                if (regexp && !regexp.test(sig.key)) {
+                if (sig.hidden || (regexp && !regexp.test(sig.key))) {
                     remove_object_svg(sig);
                     sig.index = null;
                     sig.position = null;
@@ -525,8 +409,7 @@ class View {
                 }
 
                 if (!sig.view && sig.position) {
-                    let path = circle_path(sig.position.x, sig.position.y, 10);
-                    sig.view = self.canvas.path(path)
+                    sig.view = self.canvas.path()
                                           .attr({stroke_opacity: 0,
                                                  fill_opacity: 0});
                     self.setSigDrag(sig);
@@ -544,17 +427,21 @@ class View {
         let is_output = sig.direction == 'output';
 
         let path = circle_path(pos.x, pos.y, 10);
+        let color = Raphael.hsl(sig.device.hue, 1, 0.5);
         sig.view.animate({'path': path,
-                          'fill': is_output ? 'black' : sig.device.color,
+                          'fill': is_output ? 'black' : color,
                           'fill-opacity': 1,
-                          'stroke': sig.device.color,
+                          'stroke': color,
                           'stroke-width': 6,
                           'stroke-opacity': 1}, duration, '>');
+        if (sig.hidden) sig.view.hide();
     }
 
     drawSignals(duration) {
         let self = this;
         this.graph.devices.each(function(dev) {
+            if (dev.hidden)
+                return;
             dev.signals.each(function(sig) {
                 self.drawSignal(sig, duration);
             });
@@ -566,43 +453,21 @@ class View {
         map.view.unhover();
         map.view.hover(
             function(e) {
-                // show label
-                $('#status').stop(true, false)
-                            .empty()
-                            .append("<table class=infoTable>"+
-                                        "<tbody>"+
-                                            "<tr><th colspan='2'>Map</th></tr>"+
-                                                "<tr><td>source</td><td>"+map.src.key+"</td></tr>"+
-                                                "<tr><td>destination</td><td>"+map.dst.key+"</td></tr>"+
-                                                "<tr><td>expression</td><td>"+map.expression+"</td></tr>"+
-                                        "</tbody>"+
-                                    "</table>")
-                            .css({'left': e.x + 20,
-                                  'top': e.y,
-                                  'opacity': 1});
-                map.view.animate({'stroke-width': 4}, 0, 'linear');
-
-//                if (self.draggingFrom == null)
-//                    return;
-//                else if (map == self.draggingFrom) {
-//                    // don't snap to self
-//                    return;
-//                }
-//                self.snappingTo = map;
-//                let src = self.draggingFrom.position;
-//                let dst = sig.position;
-//                let path = [['M', src.x, src.y],
-//                            ['S', (src.x + dst.x) * 0.6, (src.y + dst.y) * 0.4,
-//                             dst.x, dst.y]];
-//                let len = Raphael.getTotalLength(path);
-//                path = Raphael.getSubpath(path, 10, len - 10);
-//                self.newMap.attr({'path': path});
+                if (!self.draggingFrom) {
+                    self.tooltip.showTable(
+                        "Map", {
+                            source: map.src.key,
+                            destination: map.dst.key,
+                            mode: map.mode,
+                            expression: map.expression,
+                        }, e.x, e.y);
+                }
+                map.view.highlight();
             },
             function() {
                 self.snappingTo = null;
-                $('#status').stop(true, false)
-                            .animate({opacity: 0}, {duration: 2000});
-                map.view.animate({'stroke-width': 2}, 50, 'linear');
+                self.tooltip.hide();
+                map.view.unhighlight();
             }
         );
     }
@@ -610,89 +475,76 @@ class View {
     updateMaps() {
         let self = this;
         this.graph.maps.each(function(map) {
-            // todo: check if signals are visible
+            map.hidden = map.src.hidden || map.dst.hidden;
+            if (map.hidden) {
+                remove_object_svg(map);
+                return;
+            }
             if (!map.view) {
-                let pos = map.src.position;
-                let path = pos ? [['M', pos.x, pos.y], ['l', 10, 0]] : null;
-                map.view = self.canvas.path(path);
-                map.view.attr({'stroke-dasharray': map.muted ? '-' : '',
-                               'stroke': map.selected ? 'red' : 'white',
-                               'fill-opacity': 0,
-                               'stroke-width': 2,
-                               'arrow-start': 'none'});
-                map.view.new = true;
+                map.view = new self.mapPainter(map, self.canvas, self.frame, self.graph);
                 self.setMapHover(map);
             }
         });
     }
 
-    getMapPath(map) {
-        let self = this;
-        function tableRow(sig) {
-            if (self.tables && sig.tableIndices) {
-                let table = self.tables[sig.tableIndices[0].table];
-                return table.getRowFromIndex(sig.tableIndices[0].index);
-            }
-            return null;
+    _tableRow(sig) {
+        let row = null;
+        for (var i in this.tables) {
+            row = this.tables[i].getRowFromName(sig.key);
+            if (row)
+                break;
         }
-        let src = tableRow(map.src);
-        let dst = tableRow(map.dst);
-        if (src && dst) {
-            /* If src and dst are from same table we will always draw a bezier
-             * curve using the signal spacing for calculating control points. */
-            if (src.vx == dst.vx) {
-                // same table
-                if (map.view)
-                    map.view.attr({'arrow-end': 'block-wide-long'});
-                if (src.x == dst.x) {
-                    // signals are inline vertically
-                    let ctlx = Math.abs(src.y - dst.y) * 0.5 * src.vx + src.x;
-                    return [['M', src.x, src.y],
-                            ['C', ctlx, src.y, ctlx, dst.y, dst.x, dst.y]];
-                }
-                else {
-                    // signals are inline horizontally
-                    let ctly = Math.abs(src.x - dst.x) * 0.5 * src.vy + src.y;
-                    return [['M', src.x, src.y],
-                            ['C', src.x, ctly, dst.x, ctly, dst.x, dst.y]];
-                }
+        return row;
+    }
+
+    getMapPath(map) {
+        if (this.tables) return this._getMapPathForTables(map);
+        else return this._getMapPathForSigNodes(map);
+    }
+
+    _getMapPathForTables(map) {
+        let src = this._tableRow(map.src);
+        let dst = this._tableRow(map.dst);
+        if (!src || !dst)
+            return null;
+        if (src.vx == dst.vx) {
+            // same table
+            if (map.view) map.view.attr({'arrow-end': 'block-wide-long'});
+            return MapPath.sameTable(src, dst, this.mapPane);
+        }
+        else if (src.vy != dst.vy) {
+            // constrain positions to pane to indicate offscreen maps
+            // todo: make function
+            if (src.x < this.leftTableLeft) {
+                // constrain to bounds
+                // display a white dot
             }
-            else if (src.vy != dst.vy) {
-                // constrain positions to pane to indicate offscreen maps
-                // todo: make function
-                if (src.x < this.leftTableLeft) {
-                    // constrain to bounds
-                    // display a white dot
-                }
-                // draw intersection between tables
-                if (map.view)
-                    map.view.attr({'arrow-end': 'none'});
-                if (src.vx < 0.0001) {
-                    return [['M', src.left + 2, dst.y],
-                            ['L', src.left + src.width - 2, dst.top + 2],
-                            ['l', 0, dst.height - 2],
-                            ['Z']];
-                }
-                else {
-                    return [['M', dst.x, src.top + 2],
-                            ['L', dst.left + 2, src.top + src.height - 2],
-                            ['l', dst.width - 2, 0],
-                            ['Z']]
-                }
+            // draw intersection between tables
+            if (map.view) map.view.attr({'arrow-end': 'none',
+                                         'stroke-linejoin': 'round'});
+            if (src.vx < 0.0001) {
+                return [['M', src.left + MapPath.strokeWidth, dst.y],
+                        ['L', src.left + src.width - MapPath.strokeWidth + 2, dst.top + MapPath.strokeWidth],
+                        ['l', 0, dst.height - MapPath.strokeWidth - 2],
+                        ['Z']];
             }
             else {
-                // draw bezier curve between signal tables
-                if (map.view)
-                    map.view.attr({'arrow-end': 'block-wide-long'});
-                let mpx = (src.x + dst.x) * 0.5;
-                return [['M', src.x, src.y],
-                        ['C', mpx, src.y, mpx, dst.y, dst.x, dst.y]];
+                return [['M', dst.x, src.top + MapPath.strokeWidth + 1],
+                        ['L', dst.left + MapPath.strokeWidth, src.top + src.height - MapPath.strokeWidth + 2],
+                        ['l', dst.width - MapPath.strokeWidth - 2, 0],
+                        ['Z']]
             }
         }
-        if (!src)
-            src = map.src.position
-        if (!dst)
-            dst = map.dst.position;
+        else {
+            // draw bezier curve between signal tables
+            if (map.view) map.view.attr({'arrow-end': 'block-wide-long'});
+            return MapPath.betweenTables(src, dst);
+        }
+    }
+
+    _getMapPathForSigNodes(map) {
+        let src = map.src.position
+        let dst = map.dst.position;
         if (!src || !dst)
             return null;
 
@@ -708,67 +560,16 @@ class View {
                 ['S', mpx, mpy, dst.x, dst.y]];
     }
 
-    drawMaps(duration) {
-        let self = this;
+    drawMaps(duration, signal) {
         this.graph.maps.each(function(map) {
             if (!map.view)
                 return;
-            if (map.hidden) {
-                map.view.attr({'stroke-opacity': 0}, duration, '>');
+            if (signal && map.src != signal && map.dst != signal)
                 return;
-            }
-            map.view.stop();
-
-            let path = self.getMapPath(map);
-            if (self.shortenPaths) {
-                // shorten path so it doesn't draw over signals
-                let len = Raphael.getTotalLength(path);
-                path = Raphael.getSubpath(path, self.shortenPaths,
-                                          len - self.shortenPaths);
-            }
-
-            let fill = (self.type == 'grid' && path.length > 3) ? 1.0 : 0.0;
-            let color = map.selected ? 'red' : 'white';
-            if (!path) {
-                console.log('problem generating path for map', map);
-                return;
-            }
-
-            if (map.view.new) {
-                map.view.new = false;
-                if (map.status == "staged") {
-                    // draw map directly
-                    map.view.attr({'path': path,
-                                   'stroke-opacity': 0.5,
-                                   'stroke': color,
-                                   'stroke-dasharray': map.muted ? '-' : '',
-                                   'fill-opacity': fill,
-                                   'fill': color,
-                                   'arrow-end': 'block-wide-long'
-                                  })
-                            .toFront();
-                    return;
-                }
-                // draw animation following arrow path
-                let len = Raphael.getTotalLength(path);
-                let path_mid = Raphael.getSubpath(path, 0, len * 0.5);
-                map.view.animate({'path': path_mid,
-                                  'stroke-opacity': 1.0},
-                                 duration * 0.5, '>')
-                        .toFront();
-            }
-            else {
-//                map.view.attr({'arrow-end': 'block-wide-long'});
-                map.view.animate({'path': path,
-                                  'stroke-opacity': 1.0,
-                                  'fill-opacity': fill,
-                                  'fill': color,
-                                  'stroke-width': 2,
-                                  'stroke': color},
-                                 duration, '>')
-                        .toFront();
-            }
+            else map.view.draw(duration);
         });
+        if (this.newMap)
+            this.newMap.view.draw(0);
     }
 
     update() {
@@ -790,25 +591,20 @@ class View {
             for (index in this.tables)
                 updated |= this.tables[index].pan(delta_x, delta_y);
         }
-        if (updated)
-            this.draw(0);
+        return updated;
     }
 
     canvasPan(x, y, delta_x, delta_y) {
         x -= this.frame.left;
         y -= this.frame.top;
-        this.svgPosX += delta_x * this.svgZoom;
-        this.svgPosY += delta_y * this.svgZoom;
+        this.canvas.pan.x += delta_x * this.canvas.zoom;
+        this.canvas.pan.y += delta_y * this.canvas.zoom;
 
-        this.canvas.setViewBox(this.svgPosX, this.svgPosY,
-                               this.frame.width * this.svgZoom,
-                               this.frame.height * this.svgZoom, false);
-        $('#status').stop(true, false)
-                    .text('pan: ['+this.svgPosX.toFixed(2)+', '+this.svgPosY.toFixed(2)+']')
-                    .css({'left': x + 10,
-                          'top': y + 60,
-                          'opacity': 1})
-                    .animate({opacity: 0}, {duration: 2000});
+        this.canvas.setViewBox(this.canvas.pan.x, this.canvas.pan.y,
+                               this.frame.width * this.canvas.zoom,
+                               this.frame.height * this.canvas.zoom, false);
+        this.tooltip.showBrief('pan: ['+this.canvas.pan.x.toFixed(2)+', '
+                               +this.canvas.pan.y.toFixed(2)+']', x, y);
     }
 
     tableZoom(x, y, delta) {
@@ -825,42 +621,34 @@ class View {
             for (index in this.tables)
                 updated |= this.tables[index].zoom(delta, x, y, false);
         }
-        if (updated)
-            this.draw(0);
+        return updated;
     }
 
     canvasZoom(x, y, delta) {
         x -= this.frame.left;
         y -= this.frame.top;
-        let newZoom = this.svgZoom + delta * 0.01;
+        let newZoom = this.canvas.zoom + delta * 0.01;
         if (newZoom < 0.1)
             newZoom = 0.1;
         else if (newZoom > 20)
             newZoom = 20;
-        if (newZoom == this.svgZoom)
+        if (newZoom == this.canvas.zoom)
             return;
-        let zoomDiff = this.svgZoom - newZoom;
-        this.svgPosX += x * zoomDiff;
-        this.svgPosY += (y - this.frame.top) * zoomDiff;
-        this.canvas.setViewBox(this.svgPosX, this.svgPosY,
+        let zoomDiff = this.canvas.zoom - newZoom;
+        this.canvas.pan.x += x * zoomDiff;
+        this.canvas.pan.y += (y - this.frame.top) * zoomDiff;
+        this.canvas.setViewBox(this.canvas.pan.x, this.canvas.pan.y,
                                this.frame.width * newZoom,
                                this.frame.height * newZoom, false);
-
-        $('#status').stop(true, false)
-                    .text('zoom: '+(100/newZoom).toFixed(2)+'%')
-                    .css({'left': x + 10,
-                          'top': y + 60,
-                          'opacity': 1})
-                    .animate({opacity: 0}, {duration: 2000});
-
-        this.svgZoom = newZoom;
+        this.tooltip.showBrief( 'zoom: '+(100/newZoom).toFixed(2)+'%', x, y);
+        this.canvas.zoom = newZoom;
     }
 
     resetPanZoom() {
         this.canvas.setViewBox(0, 0, this.frame.width, this.frame.height, false);
-        this.svgZoom = 1;
-        this.svgPosX = 0;
-        this.svgPosY = 0;
+        this.canvas.zoom = 1;
+        this.canvas.pan.x = 0;
+        this.canvas.pan.y = 0;
     }
 
     filterSignals(direction, text) {
@@ -873,17 +661,16 @@ class View {
                     updated |= table.filterByName(text);
             }
             if (updated) {
-                this.update('signals');
-                this.draw(1000);
+                this.draw(0);
             }
         }
         else {
-            if (direction == 'src')
+            if (direction == 'output')
                 this.srcregexp = text ? new RegExp(text, 'i') : null;
             else
                 this.dstregexp = text ? new RegExp(text, 'i') : null;
             this.update('signals');
-            this.draw(1000);
+            this.draw(0);
         }
     }
 
@@ -891,8 +678,12 @@ class View {
         this.escaped = true;
         this.draggingFrom = null;
         if (this.newMap) {
-            this.newMap.remove();
+            if (this.newMap.view) this.newMap.view.remove();
             this.newMap = null;
+        }
+        if (this.tables) {
+            for (var index in this.tables)
+                this.tables[index].highlightRow(null, true);
         }
     }
 
@@ -903,10 +694,11 @@ class View {
         // can also drag map to self
         // if tables are orthogonal we can simply drag to 2D space between them
         // if no other table exists, can drag out signal representation
-        $('.tableDiv').on('mousedown', 'tr', function(e) {
+        $('.tableDiv').off('mousedown');
+        $('.tableDiv').on('mousedown', 'td.leaf', function(e) {
             self.escaped = false;
 
-            let src_row = this;
+            let src_row = $(this).parent('tr')[0];
             let src_table = null;
             switch ($(src_row).parents('.tableDiv').attr('id')) {
                 case "leftTable":
@@ -919,40 +711,16 @@ class View {
                     console.log('unknown source row');
                     return;
             }
-            if ($(src_row).hasClass('device')) {
-                let dev = self.graph.devices.find(src_row.id);
-                if (dev) {
-                    switch (src_table) {
-                    case self.tables.left:
-                        dev.collapsed ^= 1;
-                        break;
-                    case self.tables.right:
-                        dev.collapsed ^= 2;
-                        break;
-                    case self.tables.top:
-                        dev.collapsed ^= 4;
-                        break;
-                    default:
-                        return;
-                    }
-                    self.updateDevices();
-                    self.draw(200);
-                }
-                return;
-            }
 
-            $('svg').one('mouseenter.drawing', function() {
+            $('#svgDiv').one('mouseenter.drawing', function() {
                 deselectAllMaps(self.tables);
-
-                var src = src_table.getRowFromName(src_row.id.replace('\\/', '\/'));
+                var src = src_table.getRowFromName(src_row.id);
                 var dst = null;
+                self.draggingFrom = self.graph.find_signal(src.id);
 
-                self.newMap = self.canvas.path([['M', src.x, src.y],
-                                                ['l', 0, 0]])
-                                         .attr({'fill-opacity': 0,
-                                                'stroke': 'white',
-                                                'stroke-opacity': 1,
-                                                'stroke-width': 2});
+                self.newMap = {'src': self.draggingFrom, 'dst': null};
+                self.newMap.view = new self.mapPainter(self.newMap, self.canvas,
+                                                       self.frame, self.graph);
 
                 $('svg, .displayTable tbody tr').on('mousemove.drawing', function(e) {
                     // clear table highlights
@@ -963,64 +731,43 @@ class View {
                     if (self.escaped) {
                         $(document).off('.drawing');
                         $('svg, .displayTable tbody tr').off('.drawing');
+                        self.draggingFrom = null;
                         return;
                     }
 
                     let x = e.pageX;
                     let y = e.pageY;
-                    let path = null;
                     dst = null;
+                    self.newMap.dst = null;
                     let dst_table = null;
 
                     for (index in self.tables) {
                         // check if cursor is within snapping range
                         dst = self.tables[index].getRowFromPosition(x, y, 0.2);
                         if (dst) {
-                            dst_table = self.tables[index];
+                            if (dst.id !== src.id) {
+                                self.newMap.dst = self.graph.find_signal(dst.id);
+                                self.tables[index].highlightRow(dst, false);
+                            }
+                            else {
+                                dst = null;
+                            }
                             break;
                         }
                     }
 
-                    if (src_table == dst_table) {
-                        // draw smooth path from table to self
-                        let dist = Math.abs(src.x - dst.x) + Math.abs(src.y - dst.y) * 0.5;
-                        path = [['M', src.x, src.y],
-                                ['C',
-                                 src.x + src.vx * dist,
-                                 src.y + src.vy * dist,
-                                 dst.x + dst.vx * dist,
-                                 dst.y + dst.vy * dist,
-                                 dst.x, dst.y]];
+                    if (!self.newMap.dst) {
+                        self.newMap.dst = {position: {'x': x - self.frame.left,
+                                                      'y': y - self.frame.top}};
                     }
-                    else if (dst) {
-                        // draw bezier curve connecting src and dst
-                        path = [['M', src.x, src.y],
-                                ['C',
-                                 src.x + src.vx * self.mapPane.width * 0.5,
-                                 src.y + src.vy * self.mapPane.height * 0.5,
-                                 dst.x + dst.vx * self.mapPane.width * 0.5,
-                                 dst.y + dst.vy * self.mapPane.height * 0.5,
-                                 dst.x, dst.y]];
-                    }
-                    else {
-                        // draw smooth path connecting src to cursor
-                        path = [['M', src.x, src.y],
-                                ['S',
-                                 src.x + src.vx * self.mapPane.width * 0.5,
-                                 src.y + src.vy * self.mapPane.height * 0.5,
-                                 x - self.frame.left, y - self.frame.top]];
-                    }
+                    self.newMap.view.draw(0);
                     src_table.highlightRow(src, false);
-                    if (dst_table)
-                        dst_table.highlightRow(dst, false);
-
-                    self.newMap.attr({'path': path});
                 });
                 $(document).on('mouseup.drawing', function(e) {
                     $(document).off('.drawing');
                     $('svg, .displayTable tbody tr').off('.drawing');
-                    if (dst && dst.id) {
-                        $('#container').trigger('map', [src.id, dst.id]);
+                    if (!self.escaped && dst && dst.id) {
+                        mapper.map(src.id, dst.id);
                         self.graph.maps.add({'src': self.graph.find_signal(src.id),
                                              'dst': self.graph.find_signal(dst.id),
                                              'key': src.id + '->' + dst.id,
@@ -1029,13 +776,16 @@ class View {
                     // clear table highlights
                     self.tables.left.highlightRow(null, true);
                     self.tables.right.highlightRow(null, true);
-
-                    self.newMap.remove();
-                    self.newMap = null;
+                    self.draggingFrom = null;
+                    if (self.newMap) {
+                        self.newMap.view.remove();
+                        self.newMap = null;
+                    }
                 });
             });
             $(document).one('mouseup.drawing', function(e) {
                 $(document).off('.drawing');
+                self.draggingFrom = null;
             });
         });
     }
@@ -1045,5 +795,76 @@ class View {
         $(document).off('.drawing');
         $('svg, .displayTable tbody tr').off('.drawing');
         $('.tableDiv').off('mousedown');
+        this.tooltip.hide(true);
+    }
+
+    // sets the map painter for the view and converts existing map views to use
+    // the new painter. This should be called rather than setting the mapPainter
+    // property of this manually, which does not update the painter owned by
+    // each map
+    setMapPainter(newpainterclass) {
+        this.mapPainter = newpainterclass;
+        let self = this;
+        this.graph.maps.each(function(map) {
+            if (!map.view) return;
+            let newview = new self.mapPainter(map, self.canvas, self.frame, self.graph);
+            newview.copy(map.view);
+            map.view = newview;
+        });
     }
 }
+
+class MapPath {
+    constructor() {}
+
+    static betweenTables(src, dst) {
+        if (Math.abs(src.vx) == Math.abs(dst.vx)) {
+            // tables are parallel
+            let mpx = (src.x + dst.x) * 0.5;
+            return [['M', src.x, src.y],
+                    ['C', mpx, src.y, mpx, dst.y, dst.x, dst.y]];
+        }
+        let dx = dst.x - src.x;
+        let dy = dst.y - src.y;
+        let vertical = fuzzyEq(src.vy, 0, 0.001);
+        return [['M', src.x, src.y],
+                ['l', vertical ? dx : 0, vertical ? 0 : dy],
+                ['L', dst.x, dst.y]];
+    }
+
+    static sameTable(srcrow, dstrow, mapPane) {
+        // signals are part of the same table
+        if (Math.abs(srcrow.x - dstrow.x) < 1)
+            return this.vertical(srcrow, dstrow, mapPane);
+        else
+            return this.horizontal(srcrow, dstrow, mapPane);
+    }
+
+    static vertical(src, dst, mapPane) {
+        // signals are inline vertically
+        let minoffset = 30;
+        let maxoffset = 200;
+        let offset = Math.abs(src.y - dst.y) * 0.5;
+        if (offset > maxoffset) offset = maxoffset;
+        if (offset < minoffset) offset = minoffset;
+        let ctlx = src.x + offset * src.vx;
+        return [['M', src.x, src.y],
+                ['C', ctlx, src.y, ctlx, dst.y, dst.x, dst.y]];
+    }
+
+    static horizontal(src, dst) {
+        // signals are inline horizontally
+        let minoffset = 30;
+        let maxoffset = 200;
+        let offset = Math.abs(src.x - dst.x) * 0.5;
+        if (offset > maxoffset) offset = maxoffset;
+        if (offset < minoffset) offset = minoffset;
+        let ctly = src.y + offset * src.vy;
+        return [['M', src.x, src.y],
+                ['C', src.x, ctly, dst.x, ctly, dst.x, dst.y]];
+    }
+}
+
+MapPath.strokeWidth = 4;
+MapPath.boldStrokeWidth = 8;
+

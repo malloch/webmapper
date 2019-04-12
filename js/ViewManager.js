@@ -2,273 +2,259 @@
 //         ViewManager Class            //
 //++++++++++++++++++++++++++++++++++++++//
 
-function ViewManager(container, graph)
+class ViewManager
 {
-    let frame = null;
-    let canvas = null;
-    let tables = { 'left': null, 'right': null };
+    constructor(container, graph, tooltip) {
+        this.container = container;
+        this.frame = fullOffset($(this.container)[0]);
+        this.graph = graph;
+        this.tables = { 'left': null, 'right': null };
+        this.tooltip = tooltip;
 
-    let duration = 1000;
+        this.canvas_zoom = 1;
+        this.canvas_pan = [0, 0];
 
-    var canvas_zoom = 1;
-    var canvas_pan = [0, 0];
+        this.srcregexp = null;
+        this.dstregexp = null;
 
-    var srcregexp = null;
-    var dstregexp = null;
+        this.views = [];
 
-    let view = null;
+        // remove all previous DOM elements
+        $(this.container).empty();
+        this._add_canvas();
+        this._add_display_tables();
+        this._selection_handlers();
+        this._keyboard_handlers();
+        this._add_graph_callbacks();
 
-    this.draw = function() {
-        //
-    };
+        let self = this;
+        this.graph.devices.each(function(dev) { self._update_devices(dev, 'added'); });
+        this.graph.maps.each(function(map) { self._update_maps(map, 'added'); });
 
-    this.loadFile = function(file) {
-        if (view && view.type() == 'chord')
-            view.stageFile(file);
+        this.currentView = null;
+        this.switch_view('chord');
     }
 
-    this.switch_view = function(viewType) {
-        if (view) {
-            if (view.type == viewType) {
+    zoom(x, y, delta) {
+        this.views[this.currentView].zoom(x, y, delta);
+    }
+
+    pan(x, y, delta_x, delta_y) {
+        this.views[this.currentView].pan(x, y, delta_x, delta_y);
+    }
+
+    resetPanZoom() {
+        this.views[this.currentView].resetPanZoom();
+    }
+
+    on_resize() {
+        this.frame = fullOffset($(this.container)[0]);
+        this.views[this.currentView].resize(this.frame);
+        this.tooltip.hide();
+    }
+
+    filterSignals(searchbar, text) {
+        // need to cache regexp here so filtering works across view transitions
+        if (searchbar == 'srcSearch') {
+            this.srcregexp = text ? new RegExp(text, 'i') : null;
+            this.views[this.currentView].filterSignals('src', text.length ? text : null);
+        }
+        else {
+            this.dstregexp = text ? new RegExp(text, 'i') : null;
+            this.views[this.currentView].filterSignals('dst', text.length ? text : null);
+        }
+    }
+
+    loadFile(file) {
+        if (this.currentView == 'chord')
+            this.views[this.currentView].stageFile(file);
+    }
+
+    switch_view(viewType) {
+        if (this.currentView) {
+            if (this.currentView == viewType) {
                 // already on correct view
                 return;
             }
             // call cleanup for previous view
-            view.cleanup();
+            this.views[this.currentView].cleanup();
         }
 
-        switch (viewType) {
-            case 'balloon':
-                view = new BalloonView(frame, tables, canvas, graph);
-                break;
-            case 'canvas':
-                view = new CanvasView(frame, tables, canvas, graph);
-                break;
-            case 'graph':
-                view = new GraphView(frame, tables, canvas, graph);
-                break;
-            case 'grid':
-                view = new GridView(frame, tables, canvas, graph);
-                break;
-            case 'parallel':
-                view = new ParallelView(frame, tables, canvas, graph);
-                break;
-            case 'hive':
-                view = new HiveView(frame, tables, canvas, graph);
-                break;
-            case 'link':
-                view = new LinkView(frame, tables, canvas, graph);
-                break;
-            case 'chord':
-                view = new ChordView(frame, tables, canvas, graph);
-                break;
-            case 'console':
-                view = new ConsoleView(frame, tables, canvas, graph);
-                break;
-            case 'list':
-            default:
-                view = new ListView(frame, tables, canvas, graph);
-                break;
+        if (this.views[viewType]) {
+            this.views[viewType].setup();
+        }
+        else {
+            let view;
+            switch (viewType) {
+                case 'balloon':
+                    view = new BalloonView(this.frame, this.tables, this.canvas,
+                                           this.graph, this.tooltip);
+                    break;
+                case 'canvas':
+                    view = new CanvasView(this.frame, this.tables, this.canvas,
+                                          this.graph, this.tooltip);
+                    break;
+                case 'graph':
+                    view = new GraphView(this.frame, this.tables, this.canvas,
+                                         this.graph, this.tooltip);
+                    break;
+                case 'grid':
+                    view = new GridView(this.frame, this.tables, this.canvas,
+                                        this.graph, this.tooltip);
+                    break;
+                case 'parallel':
+                    view = new ParallelView(this.frame, this.tables, this.canvas,
+                                            this.graph, this.tooltip);
+                    break;
+                case 'hive':
+                    view = new HiveView(this.frame, this.tables, this.canvas,
+                                        this.graph, this.tooltip);
+                    break;
+                case 'chord':
+                    view = new ChordView(this.frame, this.tables, this.canvas,
+                                         this.graph, this.tooltip);
+                    break;
+                case 'console':
+                    view = new ConsoleView(this.frame, this.tables, this.canvas,
+                                           this.graph, this.tooltip);
+                    break;
+                case 'list':
+                default:
+                    view = new ListView(this.frame, this.tables, this.canvas,
+                                        this.graph, this.tooltip);
+                    break;
+            }
+            this.views[viewType] = view;
         }
 
-        view.update();
+        this.views[viewType].update();
+
+        this.currentView = viewType;
+
+        // unhighlight all view select buttons
+        $('.viewButton').removeClass("viewButtonsel");
+        // highlight the select button for the new view
+        $('#'+viewType+'Button').addClass("viewButtonsel");
     }
 
-    resize_elements = function(duration) {
-        if (view)
-            view.resize(frame);
-
-        canvas_zoom = 1;
-        canvas_pan = [0, 0];
-        canvas.setViewBox(0, 0, frame.width * canvas_zoom,
-                          frame.height * canvas_zoom, false);
-        $('#status').text('');
-    }
-
-    add_graph_callbacks = function() {
-        graph.clear_callbacks();
-        graph.add_callback(function(event, type, obj) {
+    _add_graph_callbacks() {
+        let self = this;
+        this.graph.clear_callbacks();
+        this.graph.add_callback(function(event, type, obj) {
             if (event == 'removing') {
-                remove_object_svg(obj);
+                if (type == 'map' && obj.view)
+                    obj.view.remove();
+                remove_object_svg(obj, 0);
                 return;
             }
             switch (type) {
                 case 'device':
-                    update_devices(obj, event);
+                    self._update_devices(obj, event);
                     break;
                 case 'link':
-                    update_links(obj, event);
+                    self._update_links(obj, event);
                     break;
                 case 'signal':
-                    update_signals(obj, event, true);
+                    self._update_signals(obj, event, true);
                     break;
                 case 'map':
-                    update_maps(obj, event);
+                    self._update_maps(obj, event);
                     break;
             }
         });
     };
 
-    function add_display_tables() {
-        tables.left  = new Table($('#container')[0], 'left', frame, graph);
-        tables.right = new Table($('#container')[0], 'right', frame, graph);
+    _add_display_tables() {
+        this.tables.left  = new SignalTable($('#container')[0], 'left', this.frame, this.graph);
+        this.tables.right = new SignalTable($('#container')[0], 'right', this.frame, this.graph);
     }
 
-    function add_canvas() {
+    _add_canvas() {
         $('#container').append(
-            "<div id='svgDiv' class='links'>"+
+            "<div id='svgDiv' class='svgDiv'>"+
             "</div>");
-        canvas = Raphael($('#svgDiv')[0], '100%', '100%');
+        this.canvas = Raphael($('#svgDiv')[0], '100%', '100%');
     };
 
-    this.init = function() {
-        // remove all previous DOM elements
-        $(container).empty();
-
-        frame = fullOffset($(container)[0]);
-
-        add_canvas();
-        add_display_tables();
-
-        this.switch_view('chord');
-
-        selection_handlers();
-
-        add_graph_callbacks();
-        graph.devices.each(function(dev) { update_devices(dev, 'added'); });
-        graph.maps.each(function(map) { update_maps(map, 'added'); });
-    }
-
-    function update_devices(dev, event) {
+    _update_devices(dev, event) {
         if (event == 'added' && !dev.view) {
             dev.signals.each(function(sig) {
-                update_signals(sig, 'added', false);
+                this._update_signals(sig, 'added', false);
             });
-            view.update('devices');
+            this.views[this.currentView].update('devices');
         }
         else if (event == 'removed')
-            view.update('devices');
+            this.views[this.currentView].update('devices');
     }
 
-    function update_signals(sig, event, repaint) {
+    _update_signals(sig, event, repaint) {
         if (event == 'added' && !sig.view) {
-            sig.position = position(null, null, frame);
+            sig.position = position(null, null, this.frame);
             if (repaint)
-                view.update('signals');
+                this.views[this.currentView].update('signals');
         }
         else if (event == 'modified' || event == 'removed')
-            view.update('signals');
+            this.views[this.currentView].update('signals');
     }
 
-    function update_links(link, event) {
-        view.update('links');
+    _update_links(link, event) {
+        this.views[this.currentView].update('links');
     }
 
-    function update_maps(map, event) {
+    _update_maps(map, event) {
         switch (event) {
             case 'added':
                 if (!map.view)
-                    view.update('maps');
+                    this.views[this.currentView].update('maps');
                 break;
             case 'modified':
-                if (map.view || 'console' == view.type) {
+                if (map.view) {
                     if (map.selected)
                         $('#container').trigger("updateMapPropertiesFor", map.key);
-                    view.update('maps');
+                    this.views[this.currentView].update('maps');
                 }
                 break;
             case 'removed':
-                view.update('maps');
+                this.views[this.currentView].update('maps');
                 break;
         }
     }
 
-    $('body').on('keydown.list', function(e) {
-        switch (e.which) {
-            case 8:
-            case 46:
-                // Prevent the browser from going back a page
-                // but NOT if you're focus is an input and deleting text
-                if (!$(':focus').is('input')) {
-                    e.preventDefault();
-                }
-                /* delete */
-                graph.maps.each(function(map) {
-                    if (map.view && map.selected)
-                        $('#container').trigger('unmap', [map.src.key, map.dst.key]);
-                });
-                deselectAllMaps(tables);
-                break;
-            case 65:
-                if (e.metaKey == true) { // Select all 'cmd+a'
-                    e.preventDefault();
-                    select_all_maps();
-                }
-                break;
-            case 65:
-                if (e.metaKey == true) {
-                    e.preventDefault();
-                    console.log('should add tab');
-                }
-                break;
-            case 27:
-                view.escape();
-                break;
-        }
-    });
-
-    this.zoom = function(x, y, delta) {
-        view.zoom(x, y, delta);
-    }
-
-    this.pan = function(x, y, delta_x, delta_y) {
-        view.pan(x, y, delta_x, delta_y);
-    }
-
-    this.resetPanZoom = function() {
-        view.resetPanZoom();
-    }
-
-    this.filterSignals = function(searchbar, text) {
-        // need to cache regexp here so filtering works across view transitions
-        if (searchbar == 'srcSearch') {
-            srcregexp = text ? new RegExp(text, 'i') : null;
-            view.filterSignals('src', text.length ? text : null);
-        }
-        else {
-            dstregexp = text ? new RegExp(text, 'i') : null;
-            view.filterSignals('dst', text.length ? text : null);
-        }
-    }
-
-    function selection_handlers() {
-        $('svg').on('mousedown', function(e) {
+    _selection_handlers() {
+        let self = this;
+        $('#svgDiv').on('mousedown', function(e) {
+            if (self.views[self.currentView].dragging)
+                return;
             if (e.shiftKey == false) {
-                deselectAllMaps(tables);
+                deselectAllMaps(self.tables);
             }
-            escaped = false;
+            var escaped = false;
 
             // cache current mouse position
             let svgPos = fullOffset($('#svgDiv')[0]);
+            if (self.currentView == 'grid') {
+                // svg canvas has hidden offset
+                svgPos.left -= self.tables.left.expandWidth;
+                svgPos.top -= self.tables.right.expandWidth;
+            }
             let x1 = e.pageX - svgPos.left;
             let y1 = e.pageY - svgPos.top;
 
             // check for edge intersections around point for 'click' selection
             let updated = false;
-            graph.maps.each(function(map) {
+            self.graph.maps.each(function(map) {
                 if (!map.view || map.selected)
                     return;
-                if (   edge_intersection(map.view, x1-3, y1-3, x1+3, y1+3)
-                    || edge_intersection(map.view, x1-3, y1+3, x1+3, y1-3)) {
+                if (   map.view.edge_intersection(x1-3, y1-3, x1+3, y1+3)
+                    || map.view.edge_intersection(x1-3, y1+3, x1+3, y1-3)) {
                     updated = select_obj(map);
                 }
             });
-            if (updated)
-                $('#container').trigger("updateMapProperties");
+            if (updated) $('#container').trigger("updateMapProperties");
 
             let stop = false;
             // Moving about the canvas
-            $('svg').on('mousemove.drawing', function(moveEvent) {
+            $('#svgDiv').on('mousemove.drawing', function(moveEvent) {
                 if (stop == true || escaped == true)
                     return;
 
@@ -279,31 +265,67 @@ function ViewManager(container, graph)
                     return;
 
                 // check for edge intersections for 'cross' selection
-                update = false;
-                graph.maps.each(function(map) {
+                updated = false;
+                self.graph.maps.each(function(map) {
                     if (!map.view || map.selected)
                         return;
-                    if (edge_intersection(map.view, x1, y1, x2, y2)) {
+                    if (map.view.edge_intersection(x1, y1, x2, y2)) {
                         updated |= select_obj(map);
                     }
                 });
 
                 e.stopPropagation();
 
-                if (updated)
-                    $('#container').trigger("updateMapProperties");
+                if (updated) $('#container').trigger("updateMapProperties");
 
                 x1 = x2;
                 y1 = y2;
             });
-            $('svg').one('mouseup.drawing', function(mouseUpEvent) {
+            $('#svgDiv').one('mouseup.drawing', function(mouseUpEvent) {
                 stop = true;
             });
         });
     }
 
-    this.on_resize = function() {
-        frame = fullOffset($(container)[0]);
-        resize_elements(0);
+    _keyboard_handlers() {
+        let self = this;
+        $('body').on('keydown.list', function(e) {
+            switch (e.which) {
+                case 8:
+                case 46:
+                    // Prevent the browser from going back a page
+                    // but NOT if you're focus is an input and deleting text
+                    if (!$(':focus').is('input')) {
+                        e.preventDefault();
+                    }
+                    /* delete */
+                    // do not allow 'delete' key to unmap in console view
+                    if (self.currentView == 'console') break;
+                    self.graph.maps.each(function(map) {
+                        if (map.selected)
+                        {
+                            mapper.unmap(map.src.key, map.dst.key);
+                            self.tooltip.hide();
+                        }
+                    });
+                    deselectAllMaps(self.tables);
+                    break;
+                case 65:
+                    if (e.metaKey == true) { // Select all 'cmd+a'
+                        e.preventDefault();
+                        select_all_maps();
+                    }
+                    break;
+                case 65:
+                    if (e.metaKey == true) {
+                        e.preventDefault();
+                        console.log('should add tab');
+                    }
+                    break;
+                case 27:
+                    self.views[self.currentView].escape();
+                    break;
+            }
+        });
     }
 }

@@ -82,9 +82,39 @@ MapperNodeArray.prototype = {
         else {
             if (this.obj_type == 'device') {
                 obj.signals = new MapperNodeArray('signal', this.cb_func);
-                obj.color = Raphael.getColor();
+
+                // create hue hash
+                hueHash = function(str) {
+                    var hash = 0, i, chr;
+                    if (str.length === 0) return '#000000';
+                    // separate name and ordinal
+                    let ord_idx = str.lastIndexOf('.');
+                    let ord = str.slice(ord_idx+1);
+                    str = str.slice(0, ord_idx);
+                    for (i = 0; i < str.length; i++) {
+                        chr   = str.charCodeAt(i);
+                        hash  = ((hash << 5) - hash) + (1 << chr);
+                        hash &= 0xFFFFFF; // Constrain to 48bits
+                    }
+                    // add ordinal, multiplied to be visually discriminable
+                    hash += parseInt(ord) * 600000;
+                    // constrain and normalize
+                    hash = (hash & 0xFFFFFF) / 0xFFFFFF;
+                    // convert to hue
+                    return hash;
+                };
+                obj.hue = hueHash(key);
             }
             this.contents[key] = obj;
+
+            // sort by key
+            let ordered = {};
+            let contents = this.contents;
+            Object.keys(contents).sort(namespaceSort).forEach(function(k) {
+                ordered[k] = contents[k];
+            });
+            this.contents = ordered;
+
             if (this.cb_func)
                 this.cb_func('added', this.obj_type, this.contents[key]);
         }
@@ -102,8 +132,6 @@ MapperNodeArray.prototype = {
             if (this.cb_func)
                 this.cb_func('removed', this.obj_type, {'key': key});
         }
-        if (this.obj_type == 'device' && this.size() == 0)
-            Raphael.getColor.reset();
         return key;
     },
 
@@ -248,7 +276,7 @@ function MapperGraph() {
         });
         let links = this.links;
         links.each(function(link) {
-            if (link.src == dev.name || link.dst == dev.name)
+            if (link.src == dev || link.dst == dev)
                 links.remove(link);
         });
         this.devices.remove(dev);
@@ -473,6 +501,7 @@ function MapperGraph() {
                 map.expression = map.expression.replace(/src/g, "x");
                 map.expression = map.expression.replace(/dst/g, "y");
             }
+            console.log("loaded map src: ", src, " dst: ", dst);
             this.maps.add(map);
 
             // may need to also add link
@@ -511,8 +540,8 @@ function MapperGraph() {
 
     this.exportFile = function() {
         let file = { "fileversion": "2.2",
-            "mapping": { "maps": [] }
-        };
+                     "mapping": { "maps": [] },
+                     "views": { "signals": []} };
         let numMaps = 0;
 
         this.maps.each(function(map) {
@@ -583,7 +612,138 @@ function MapperGraph() {
         });
         if (!numMaps)
             alert("No maps to save!");
+        this.devices.each(function(dev) {
+            dev.signals.each(function(sig) {
+                if (sig.canvasObject)
+                    file.views.signals.push({'name': sig.key,
+                                             'position': sig.canvasObject});
+            });
+        });
         return numMaps ? file : null;
+    }
+    
+    //naively try to make whatever maps that
+    //match source and destination names
+    this.loadFileSimple = function(file) {
+        this.fileCounter++;
+        let self = this;
+
+        upgradeFile = function(file) {
+            // update to version 2.2
+            console.log('updating file to v2.2');
+            file.mapping.maps = [];
+            for (var i in file.mapping.connections) {
+                let c = file.mapping.connections[i];
+                let map = {};
+                let src = {'name': c.source[0].slice(1)};
+                let dst = {'name': c.destination[0].slice(1)};
+                if (c.mute != null)
+                    map.muted = c.mute ? true : false;
+                if (c.expression != null)
+                    map.expression = c.expression.replace('s[', 'src[')
+                    .replace('d[', 'dst[');
+                if (c.srcMin != null)
+                    src.minimum = c.srcMin;
+                if (c.srcMax != null)
+                    src.maximum = c.srcMax;
+                if (c.dstMin != null)
+                    dst.minimum = c.dstMin;
+                if (c.dstMax != null)
+                    dst.maximum = c.dstMax;
+                if (c.boundMin != null)
+                    dst.bound_min = c.boundMin;
+                if (c.boundMax != null)
+                    dst.bound_max = c.boundMax;
+
+                if (c.mode == 'reverse') {
+                    map.mode = 'expression';
+                    map.expression = 'y=x';
+                    map.sources = [dst];
+                    map.destinations = [src];
+                }
+                else {
+                    if (c.mode == 'calibrate') {
+                        map.mode = 'linear';
+                        dst.calibrating = true;
+                    }
+                    else
+                        map.mode = c.mode;
+                    map.sources = [src];
+                    map.destinations = [dst];
+                }
+                file.mapping.maps.push(map);
+            }
+            delete file.mapping.connections;
+            file.fileversion = "2.2";
+        }
+
+        if (file.fileversion != "2.2")
+            upgradeFile(file);
+
+        for (var i in file.mapping.maps) {
+            let map = file.mapping.maps[i];
+            // TODO: enable multiple sources and destinations
+            
+            let src = map.sources[0].name;
+            let dst = map.destinations[0].name;
+            console.log('Map from file:', src,'->',dst);
+            if (!src || !dst) {
+                console.log("error adding map from file:", map);
+                continue;
+            }
+            if (map.sources[0].bound_min)
+                map.src_bound_min = map.sources[0].bound_min;
+            if (map.sources[0].bound_max)
+                map.src_bound_min = map.sources[0].bound_max;
+            if (map.destinations[0].bound_min)
+                map.dst_bound_min = map.destinations[0].bound_min;
+            if (map.destinations[0].bound_max)
+                map.dst_bound_min = map.destinations[0].bound_max;
+            if (map.sources[0].calibrating)
+                map.src_calibrating = map.sources[0].calibrating;
+            if (map.destinations[0].calibrating)
+                map.dst_calibrating = map.destinations[0].calibrating;
+            if (map.sources[0].min)
+                map.src_min = map.sources[0].min;
+            if (map.sources[0].max)
+                map.src_max = map.sources[0].max;
+            if (map.destinations[0].min)
+                map.dst_min = map.destinations[0].min;
+            if (map.destinations[0].max)
+                map.dst_max = map.destinations[0].max;
+            delete map.sources;
+            delete map.destinations;
+            map.src = src;
+            map.dst = dst;
+            //map.status = 'offline'; //
+            if (map.expression) {
+                // fix expression
+                // TODO: better regexp to avoid conflicts with user vars
+                map.expression = map.expression.replace(/src/g, "x");
+                map.expression = map.expression.replace(/dst/g, "y");
+            }
+
+            src = src.slice(src.indexOf('/'));
+            dst = dst.slice(dst.indexOf('/'));
+            let self = this;
+            this.devices.each(function(d1) {
+                if (d1.hidden)
+                    return;
+                let srcsig = d1.signals.find(d1.name+src);
+                if (!srcsig)
+                    return;
+                let dstsig = null;
+                self.devices.each(function (d2) {
+                    if (d2.hidden)
+                        return;
+                    dstsig = d2.signals.find(d2.name+dst);
+                    if (!dstsig)
+                        return;
+                    console.log('  Creating map:', srcsig.key, '->', dstsig.key);
+                    mapper.map(srcsig.key, dstsig.key, map);
+                });
+            });
+        }
     }
 
     // delete handlers in case of refresh

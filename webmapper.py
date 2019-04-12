@@ -46,10 +46,12 @@ def dev_props(dev):
     props = dev.properties.copy()
     if 'synced' in props:
         props['synced'] = props['synced'].get_double()
-    props['key'] = dev['name']
+    props['key'] = dev.name
     props['status'] = 'active'
-    del props['is_local']
-    del props['id']
+    if 'is_local' in props:
+        del props['is_local']
+    if 'id' in props:
+        del props['id']
     return props
 
 def sig_props(sig):
@@ -135,10 +137,8 @@ def on_map(type, map, action):
 #        print 'ON_MAP (removed)', map_props(map)
         server.send_command("del_map", map_props(map))
 
-def set_map_properties(props):
+def set_map_properties(props, map):
     # todo: check for convergent maps, only release selected
-    maps = find_sig(props['src']).maps().intersect(find_sig(props['dst']).maps())
-    map = maps.next()
     if not map:
         print "error: couldn't retrieve map ", props['src'], " -> ", props['dst']
         return
@@ -263,18 +263,21 @@ def find_sig(fullname):
         sig = dev.signals().filter(mpr.PROP_NAME, names[1]).next()
         return sig
     else:
-        print 'error: could not find device', dev
+        print 'error: could not find device', names[0]
 
 def new_map(args):
-    map = mpr.map(find_sig(args[0]), find_sig(args[1]))
-    if not map:
-        print 'error: failed to create map', args[0], "->", args[1]
-        return;
+    if find_sig(args[0]) and find_sig(args[1]):
+        map = mapper.map(find_sig(args[0]), find_sig(args[1]))
+        if not map:
+            print 'error: failed to create map', args[0], "->", args[1]
+            return;
+        else:
+            print 'created map: ', args[0], ' -> ', args[1]
+        if len(args) > 2 and type(args[2]) is dict:
+            set_map_properties(args[2], map)
+        map.push()
     else:
-        print 'created map: ', args[0], ' -> ', args[1]
-    if len(args) > 2 and type(args[2]) is dict:
-        map.set_properties(args[2])
-    map.push()
+       print args[0], ' and ', args[1], ' not found on network!'
 
 def release_map(args):
     # todo: check for convergent maps, only release selected
@@ -288,7 +291,7 @@ server.add_command_handler("add_signals",
 server.add_command_handler("add_maps",
                            lambda x: ("add_maps", map(map_props, g.maps())))
 
-server.add_command_handler("set_map", lambda x: set_map_properties(x))
+server.add_command_handler("set_map", lambda x: set_map_properties(x, None))
 
 server.add_command_handler("map", lambda x: new_map(x))
 

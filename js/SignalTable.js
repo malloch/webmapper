@@ -1,15 +1,19 @@
 'use strict';
 
 // An object for the overall display
-class Table {
+class SignalTable {
     constructor(container, location, frame, graph) {
         this.graph = graph;
+        this.location = location;
         this.id = location + 'Table';
         this.detail = true;
         this.direction = null;
         this.snap = 'right';
+        this.expand = false;
         this.scrolled = 0;
         this.zoomed = 1;
+
+        this.minHeight = 17;
 
         this.targetHeight = 600;
         this.rowHeight = 0;
@@ -17,10 +21,15 @@ class Table {
 
         this.num_devs = 0;
         this.num_sigs = 0;
+        this.num_hidden_sigs = 0;
 
+        this.collapseHandler = null;
         this.collapseAll = false;
+        this.expandWidth = 0;
 
-        this.title = 'SIGNALS';
+        this.ignoreCanvasObjects = false;
+
+        this.title = 'SIGS';
 
         // The selected rows, for shift-selecting
         this.selectedRows = {};
@@ -43,39 +52,15 @@ class Table {
 
         // Create the skeleton for the table within the div
         // TODO: move div properties to css
-        if (this.detail) {
-            $(this.div).append(
-                "<div style='height:20px; position:relative; width:100%;'>"+
-                    "<div id="+this.id+"Title style='float:left; position:relative; width:75%; padding-left:10px'>"+
-                        "<strong>"+this.title+"</strong>"+
-                    "</div>"+
-                    "<div style='float:left; position:relative; width:25%; padding-left:20px'>"+
-                        "<strong>TYPE</strong>"+
-                    "</div>"+
-                "</div>"+
-                "<div id="+this.id+"Scroller style='height:calc(100% - 20px); width:100%; position:relative; overflow:auto'>"+
-                    "<table class='displayTable'>"+
-                        "<colgroup>"+
-                            "<col style='width:75%'>"+
-                            "<col style='width:25%'>"+
-                        "</colgroup>"+
-                        "<tbody></tbody>"+
-                    "</table>"+
-                "</div>");
-        }
-        else {
-            $(this.div).append(
-                "<div style='height: 20px; position:relative; width:100%'>"+
-                    "<div id="+this.id+"Title style='float: left; position:relative; width:100%; padding-left:20px; padding-right:20px'>"+
-                        "<strong>"+this.title+"</strong>"+
-                    "</div>"+
-                "</div>"+
-                "<div id="+this.id+"Scroller style='height:calc(100% - 20px); width:100%; position:relative; overflow:auto'>"+
-                    "<table class='displayTable'>"+
-                        "<tbody></tbody>"+
-                    "</table>"+
-                "</div>");
-        }
+        $(this.div).append(
+            "<div id="+this.id+"Title class=tableTitle>"+
+                "<strong>"+this.title+"</strong>"+
+            "</div>"+
+            "<div id="+this.id+"Scroller class=tableScroller>"+
+                "<table class='displayTable "+this.location+"'>"+
+                    "<tbody></tbody>"+
+                "</table>"+
+            "</div>");
         this.table = $("#"+this.id+" .displayTable")[0];
         this.tbody = $("#"+this.id+" .displayTable tbody")[0];
 
@@ -113,63 +98,84 @@ class Table {
             angle_was += Math.PI * 2;
 
         $({someValue: 0}).animate({someValue: 1},
-                                  {duration: duration * 0.33,
-                                  step: function(now, fx) {
-            let was = 1 - now;
-            self.frame.left = left * now + left_was * was;
-            self.frame.top = top * now + top_was * was;
-            self.frame.width = width * now + width_was * was;
-            self.frame.height = height * now + height_was * was;
-            self.frame.angle = angle * now + angle_was * was;
-            $('#' + self.id).css({
-                'left': self.frame.left,
-                'top': self.frame.top,
-                'width': self.frame.width,
-                'height': self.frame.height,
-                'transform-origin': 'top left',
-                'WebkitTransform': 'rotate(' + self.frame.angle + 'rad)',
-                '-moz-transform': 'rotate(' + self.frame.angle + 'rad)',
-                'transform': 'rotate(' + self.frame.angle + 'rad)',
-                'text-align': self.frame.angle ? 'right' : 'left'
-            });
+                                  {duration: duration,
+            step: function(now, fx) {
+                let was = 1 - now;
+                self.frame.left = left * now + left_was * was;
+                self.frame.top = top * now + top_was * was;
+                self.frame.width = width * now + width_was * was;
+                self.frame.height = height * now + height_was * was;
+                self.frame.angle = angle * now + angle_was * was;
+                $('#' + self.id).css({
+                    'left': self.frame.left,
+                    'top': self.frame.top,
+                    'width': self.frame.width,
+                    'height': self.frame.height,
+                    'transform-origin': 'top left',
+                    'WebkitTransform': 'rotate(' + self.frame.angle + 'rad)',
+                    '-moz-transform': 'rotate(' + self.frame.angle + 'rad)',
+                    'transform': 'rotate(' + self.frame.angle + 'rad)',
+                    'text-align': self.frame.angle ? 'right' : 'left'
+                });
 
-            $('#' + self.id + 'Scroller').css({
-                'left': innerLeft ? innerLeft : 0,
-                'top': 0,
-                'width': innerWidth ? innerWidth : '100%',
-                'height': self.frame.height - 20,
-            });
-            if (func)
-                func();
+                $('#' + self.id + 'Scroller').css({
+                    'left': innerLeft ? innerLeft : 0,
+                    'top': 0,
+                    'width': innerWidth ? innerWidth : '100%',
+                    'height': self.frame.height - 20,
+                });
+
+                if (func)
+                    func();
+            },
+            complete: function() {
+                $('#'+self.id+'Title').css('float', (angle == 0) ? 'left' : 'right');
+                self.updateTitle();
+                self.targetHeight = height - 20;
+                self.adjustRowHeight();
         }});
-        $('#'+this.id+'Title').css('float', (angle == 0) ? 'left' : 'right');
     }
 
     filterByName(string) {
         if (this.filterstring == string)
             return;
         this.filterstring = string;
-        this.regexp = string ? new RegExp(this.filterstring, 'i') : null;
-        if (this.regexp)
-            this.update();
+        this.regexp = string ? 
+            new RegExp(this.filterstring, 'i') : 
+            new RegExp('.*');
+        this.update();
+        this.grow();
+        return true;
+    }
+
+    updateTitle() {
+        let title = null;
+        switch (this.direction) {
+            case 'output':
+                title = this.frame.width > 200 ? 'SOURCES' : 'SRC';
+                break;
+            case 'input':
+                title = this.frame.width > 200 ? 'DESTINATIONS' : 'DST';
+                break;
+            default:
+                title = 'SIGS';
+                break;
+        }
+        this.title = title;
+        if (!(this.num_sigs + this.num_hidden_sigs) || (this.frame.left + this.frame.width) < 0)
+            title = '';
+        else if (this.num_hidden_sigs > 0)
+            title += " ("+this.num_sigs+" of "+(this.num_sigs + this.num_hidden_sigs)+")";
+        else
+            title += " ("+this.num_sigs+")";
+        $('#'+this.id+'Title>strong').text(title);
     }
 
     filterByDirection(dir) {
-        if (dir)
-            this.direction = (dir == 'both') ? null : dir;
-        switch (dir) {
-            case 'output':
-                dir = 'SOURCES';
-                break;
-            case 'input':
-                dir = 'DESTINATIONS';
-                break;
-            default:
-                dir = 'SIGNALS';
-                break;
-        }
-        $('#'+this.id+'Title>strong').text(dir);
-        this.title = dir;
+        if (!dir)
+            return;
+        this.direction = (dir == 'both') ? null : dir;
+        this.updateTitle();
     }
 
     showDetail(show) {
@@ -183,104 +189,56 @@ class Table {
         return this.rowHeight * this.table.rows.length;
     }
 
-    getRowFromIndex(idx) {
-        let rowHeight = Math.round(this.rowHeight);
-        let j = 0;
-        for (var i = 0, row; row = this.table.rows[i]; i++) {
-            if ($(row).hasClass('invisible')) {
-                continue;
-            }
-            if (j < idx) {
-                ++j;
-                continue;
-            }
-            if (this.snap == 'bottom') {
-                let left = j * rowHeight - this.scrolled + 200;
-                let top = this.frame.top - this.frame.width;
-                return {'left': left,
-                        'right': left + rowHeight,
-                        'top': top,
-                        'bottom': top + this.frame.width,
-                        'width': rowHeight,
-                        'height': this.frame.width,
-                        'x': left + rowHeight * 0.5,
-                        'y': top + this.frame.width,
-                        'vx': Math.cos(this.frame.angle),
-                        'vy': -Math.sin(this.frame.angle),
-                        'id': row.id.replace('\\/', '\/'),
-                        'even': $(row).hasClass('even'),
-                        'type': $(row).hasClass('device') ? 'device' : 'signal',
-                        'index': j};
-            }
-            else {
-                let left = row.offsetLeft + this.div[0].offsetLeft;
-                let top = j * rowHeight - this.scrolled + 20 + this.frame.top;
-                let snap = this.snap == 'left' ? -1 : 1;
-                return {'left': left,
-                        'right': left + row.offsetWidth,
-                        'top': top,
-                        'bottom': top + rowHeight,
-                        'width': this.frame.width,
-                        'height': rowHeight,
-                        'x': this.snap == 'left' ? this.frame.left : this.frame.left + this.frame.width,
-                        'y': top + rowHeight * 0.5,
-                        'vx': Math.cos(this.frame.angle) * snap,
-                        'vy': Math.sin(this.frame.angle),
-                        'id': row.id.replace('\\/', '\/'),
-                        'even': $(row).hasClass('even'),
-                        'type': $(row).hasClass('device') ? 'device' : 'signal',
-                        'index': j};
-            }
-        }
-    }
+    getRowFromName(id) {
+        let self = this;
 
-    getRowFromName(name) {
-        let id = name.replace('/', '\\/');
-        let rowHeight = Math.round(this.rowHeight);
-        let j = 0;
-        for (var i = 0, row; row = this.table.rows[i]; i++) {
-            if (row.id == id) {
-                if ($(row).hasClass('invisible')) {
-                    if (name.indexOf('/') != -1)
-                        return this.getRowFromName(name.split('/')[0]);
-                    else
-                        return null;
+        function getTD() {
+            let td = $("#"+self.id+" td[id='"+id+"']");
+            if (!td.length) return null;
+
+            let tr = $(td).parents('tr')[0];
+            if ($(td).hasClass('invisible')) {
+                // find last visible row
+                let tr = $(td).parents('tr')[0];
+                while ($(tr).hasClass('invisible')) {
+                    tr = $(tr).prev();
                 }
-                if (this.snap == 'bottom') {
-                    let left = j * rowHeight - this.scrolled;
-                    let top = row.offsetLeft - this.frame.top;
-                    return {'left': left,
-                            'top': top,
-                            'width': rowHeight,
-                            'height': row.offsetWidth,
-                            'x': left + rowHeight * 0.5,
-                            'y': top + row.offsetWidth,
-                            'vx': Math.cos(this.frame.angle),
-                            'vy': Math.sin(this.frame.angle),
-                            'id': row.id.replace('\\/', '\/'),
-                            'type': $(row).hasClass('device') ? 'device' : 'signal',
-                            'index': j};
-                }
-                else {
-                    let left = row.offsetLeft + this.div[0].offsetLeft;
-                    let top = j * rowHeight - this.scrolled + 20;
-                    let snap = this.snap == 'left' ? -1 : 1;
-                    return {'left': left,
-                            'top': top,
-                            'width': row.offsetWidth,
-                            'height': rowHeight,
-                            'x': this.snap == 'left' ? left : left + row.offsetWidth,
-                            'y': top + rowHeight * 0.5,
-                            'vx': Math.cos(this.frame.angle) * snap,
-                            'vy': Math.sin(this.frame.angle),
-                            'id': row.id.replace('\\/', '\/'),
-                            'type': $(row).hasClass('device') ? 'device' : 'signal',
-                            'index': j};
-                }
-                break;
+                if (!tr.length)
+                    return null;
+                td = $(tr).children('td').not('.filler, .invisible');
+                if (self.location == 'left')
+                    td = $(td).last();
+                else
+                    td = $(td).first();
             }
-            else if (!$(row).hasClass('invisible'))
-                ++j;
+            return $(td);
+        }
+
+        if (this.snap == 'bottom') {
+            //pos.left += this.frame.left + 20;
+            return {get left(){ return getTD().position().left + self.frame.left + 20},
+                    top: 0,
+                    get width() {return getTD().height()},
+                    get height() {return self.frame.width},
+                    get x() {let td = getTD(); return td ? td.position().left + self.frame.left + 20 + td.height() * 0.5 : null},
+                    get y() {return self.frame.width},
+                    get vx() {return Math.cos(self.frame.angle)},
+                    get vy() {return -Math.sin(self.frame.angle)},
+                    id: id};
+        }
+        else {
+            //pos.top += this.frame.top + 20;
+            //pos.left = this.frame.left;
+            let snap = this.snap == 'left' ? -1 : 1;
+            return {get left() {return self.frame.left;},
+                    get top() {return getTD().position().top + self.frame.top + 20;},
+                    get width() {return self.frame.width},
+                    get height() {return getTD().height();},
+                    get x() {return self.snap == 'left' ? self.frame.left : self.frame.left + self.frame.width},
+                    get y() {let td = getTD(); return td ? td.position().top + self.frame.top + 20 + td.height() * 0.5 : null},
+                    get vx() {return Math.cos(self.frame.angle) * snap},
+                    get vy() {return -Math.sin(self.frame.angle)},
+                    id: id};
         }
     }
 
@@ -293,17 +251,18 @@ class Table {
             case 'left':
                 if (x < this.frame.left - this.frame.width * snapRatio)
                     return;
-                x = this.div[0].offsetLeft + this.div[0].offsetWidth * 0.5;
+                x = this.div[0].offsetLeft + 20;
                 break;
             case 'right':
                 if (x > this.frame.left + this.frame.width * (1 + snapRatio))
                     return;
-                x = this.div[0].offsetLeft + this.div[0].offsetWidth * 0.5;
+                x = this.div[0].offsetLeft + this.div[0].offsetWidth - 20;
                 break;
             case 'bottom':
-                if (y > this.frame.top + this.frame.height * (1 + snapRatio))
+                let yoffset = $(this.div[0]).offset().top;
+                if (y > yoffset + this.frame.width * (1 + snapRatio))
                     return;
-                y = this.div[0].offsetTop + 50;
+                y = yoffset + this.frame.width - 20;
                 break;
             default:
                 console.log("unknown table snap property", this.snap);
@@ -314,34 +273,39 @@ class Table {
         let row = $(td).parents('tr');
         let rowHeight = Math.round(this.rowHeight);
         row = row[0];
+        if (!row) {
+            console.log("error retrieving row");
+            return;
+        }
+
         let output;
         if (this.snap == 'bottom') {
-            let left = row.offsetTop - this.scrolled;
-            let top = row.offsetLeft - this.frame.top;
+            let left = row.offsetTop - this.scrolled + this.frame.left + 20;
+            let top = row.offsetLeft;
             output = {'left': left,
                       'top': top,
                       'width': rowHeight,
                       'height': row.offsetWidth,
                       'x': left + rowHeight * 0.5,
-                      'y': top + row.offsetWidth,
+                      'y': top + this.frame.width,
                       'vx': Math.cos(this.frame.angle),
-                      'vy': Math.sin(this.frame.angle),
-                      'id': row.id.replace('\\/', '\/'),
+                      'vy': -Math.sin(this.frame.angle),
+                      'id': row.id,
                       'type': $(row).hasClass('device') ? 'device' : 'signal'};
         }
         else {
             let left = row.offsetLeft + this.div[0].offsetLeft;
-            let top = row.offsetTop - this.scrolled + 20;
+            let top = row.offsetTop - this.scrolled + 20 + this.frame.top;
             let snap = this.snap == 'left' ? -1 : 1;
             output = {'left': left,
                       'top': top,
-                      'width': row.offsetWidth,
+                      'width': this.frame.width,
                       'height': rowHeight,
-                      'x': this.snap == 'left' ? left : left + row.offsetWidth,
+                      'x': this.snap == 'left' ? this.frame.left : this.frame.left + this.frame.width,
                       'y': top + rowHeight * 0.5,
                       'vx': Math.cos(this.frame.angle) * snap,
                       'vy': Math.sin(this.frame.angle),
-                      'id': row.id.replace('\\/', '\/'),
+                      'id': row.id,
                       'type': $(row).hasClass('device') ? 'device' : 'signal'};
         }
         return output;
@@ -349,31 +313,48 @@ class Table {
 
     highlightRow(row, clear) {
         if (clear)
-            $('#'+this.id+' tr').removeClass('trsel');
+            $('#'+this.id+' td').removeClass('tdsel');
         if (row && row.id) {
-            let dom_row = document.getElementById(row.id.replace('\/', '\\/'));
-            if (dom_row)
-                $(dom_row).addClass('trsel');
+            let id = row.id.split('/');
+            let first = true;
+            while (id.length) {
+                let sel = $("#"+this.id+" td[id='"+id.join('/')+"'");
+                if (first)
+                    sel = $(sel).filter('.leaf');
+                else
+                    sel = $(sel).not('.leaf');
+                $(sel).addClass('tdsel');
+                id.pop();
+                first = false;
+            }
         }
     }
 
     pan(dx, dy, x, y) {
         if (!dx && !dy)
             return false;
+        if (x != null && y != null) {
+            // check if position applies to this table
+            if (x < this.frame.left)
+                return false;
+            if (this.snap == 'bottom') {
+                if (x > this.frame.left + this.frame.height)
+                    return false;
+                if (y > this.frame.top || y < this.frame.top - this.frame.width)
+                    return false;
+            }
+            else {
+                if (x > this.frame.left + this.frame.width)
+                    return false;
+                if (y < this.frame.top || y > this.frame.top + this.frame.height)
+                    return false;
+            }
+        }
         if (this.snap == "bottom") {
             // rotated 90deg: invert x and y
             let temp = x;
             x = y;
             y = temp;
-        }
-        if (x != null && y != null) {
-            // check if position applies to this table
-            if (   x < this.div[0].offsetLeft
-                || x > this.div[0].offsetLeft + this.div[0].offsetWidth
-                || y < this.div[0].offsetTop
-                || y > this.div[0].offsetTop + this.div[0].offsetHeight) {
-                return false;
-            }
         }
         let delta = (this.snap == 'bottom') ? dx : dy;
         let new_scroll = this.scrolled + delta;
@@ -390,14 +371,14 @@ class Table {
     adjustRowHeight() {
         // adjust row heights to fill table
         let natRowHeight = this.targetHeight / (this.num_devs + this.num_sigs);
-        if (natRowHeight > 16) {
+        if (natRowHeight > this.minHeight) {
             // don't allow zoom < 1
             if (this.zoomed < 1)
                 this.zoomed = 1;
         }
         let rowHeight = natRowHeight * this.zoomed;
-        if (rowHeight < 16) {
-            rowHeight = 16;
+        if (rowHeight < this.minHeight) {
+            rowHeight = this.minHeight;
             this.zoomed = rowHeight / natRowHeight;
         }
         let changed = (Math.round(rowHeight) != Math.round(this.rowHeight));
@@ -405,6 +386,8 @@ class Table {
             this.rowHeight = $("#"+this.id+' tbody tr')
                                 .css('height', rowHeight+'px')
                                 .height();
+//            let self = this;
+//            $("#"+this.id+" td").each(function(td) { self.autoRotate(this); });
         }
         return changed;
     }
@@ -453,25 +436,53 @@ class Table {
         return true;
     }
 
+    grow() {
+        if (this.expand) {
+            let tr = $("#"+this.id+" tr")[0];
+            let tds = $(tr).children('td').not('.invisible');
+            this.expandWidth = 0;
+            if (this.location == 'left') {
+                for (var i = 0; i < tds.length - 1; i++)
+                    this.expandWidth += tds[i].offsetWidth;
+            }
+            else {
+                for (var i = 1; i < tds.length; i++)
+                    this.expandWidth += tds[i].offsetWidth;
+            }
+        }
+    }
+
+    autoRotate(td) {
+        if ($(td).hasClass('leaf')) {
+            return;
+        }
+        let id = $(td).attr('id');
+        if (!id)
+            return;
+        let text = id.split('/').slice(-1)[0];
+        let h = td.offsetHeight;
+        let w = textWidth(text);
+        if (w > this.minHeight && w < h) {
+            $(td).addClass('tall');
+            $(td).empty().append("<div>"+text+"</div>");
+        }
+        else {
+            $(td).removeClass('tall');
+            $(td).empty().append(text);
+        }
+    }
+
     update(targetHeight) {
+        if (this.hidden)
+            return;
         if (targetHeight)
             this.targetHeight = targetHeight - 20; // headers
 
-        // http://stackoverflow.com/questions/661562/how-to-format-a-float-in-javascript
-        function toFixed_alt(value, precision) {
-            var power = Math.pow(10, precision || 0);
-            return String(Math.round(value * power) / power);
-        }
-
         $(this.tbody).empty();
-        let tbody = this.tbody;
+        let _self = this;
         let num_devs = 0;
         let num_sigs = 0;
-        let dir = this.direction;
-        let id = this.id;
-        let detail = this.detail;
-        let regexp = this.regexp;
-        let collapseAll = this.collapseAll;
+        let num_hidden_sigs = 0;
         let collapse_bit;
         switch (this.snap) {
             case 'right':
@@ -486,42 +497,27 @@ class Table {
         }
         let title = this.title;
 
+        var max_depth = 0;
+        var tree = {"branches": {}, "num_leaves": 0};
         this.graph.devices.each(function(dev) {
+            if (dev.hidden) return;
+            if (_self.direction == 'output' && dev.num_outputs < 1) return;
+            else if (_self.direction == 'input' && dev.num_inputs < 1) return;
+
             let num_dev_sigs = 0;
             let sigs = [];
-            dev.signals.each(function(sig) {
-                // todo: check for filters
-                if (dir) {
-                    if (sig.direction != dir)
-                        return;
-                }
-                if (sig.canvas_object)
-                    return;
-                if (regexp && !regexp.test(sig.key))
-                    return;
 
-                let name = sig.name.replace(/\,/g, '<wbr>/');
-                let min = sig.min;
-                if (typeof(min) == 'object') {
-                    for (i in min)
-                        min[i] = toFixed_alt(min[i], 4);
-                }
-                else if (typeof(min) == 'number')
-                    min = toFixed_alt(min, 4);
-                min = String(min).replace(/\,/g, '<wbr>, ');
-                if (min.indexOf(',') >= 0)
-                    min = '[ ' + min + ' ]';
+            function hide(sig) {
+                sigs.push({
+                    id: sig.key,
+                    invisible: true
+                });
+                num_hidden_sigs += 1;
+            }
 
-                let max = sig.max;
-                if (typeof(max) == 'object') {
-                    for (i in max)
-                        max[i] = toFixed_alt(max[i], 4);
-                }
-                else if (typeof(max) == 'number')
-                    max = toFixed_alt(max, 4);
-                max = String(max).replace(/\,/g, '<wbr>, ');
-                if (max.indexOf(',') >= 0)
-                    max = '[ ' + max + ' ]';
+            function ignore(sig) {}
+
+            function add(sig) {
                 let type;
                 switch (String.fromCharCode(sig.type)) {
                     case 'i':
@@ -537,41 +533,264 @@ class Table {
                         type = '?';
                         break;
                 }
+
                 let typelen = sig.length == 1 ? type : type + '[' + sig.length + ']';
                 let unit = sig.unit == 'unknown' ? '' : ' ('+sig.unit+')';
-                let ioname = (sig.direction == 'input') ? '→'+name : name+'→';
 
-                sigs.push([sig.key.replace('/', '\\/'), ioname, typelen+unit, sig.direction]);
+                sigs.push({
+                    id: sig.key,
+                    name: sig.name,
+                    unit: typelen+unit, 
+                    direction: sig.direction,
+                    color: Raphael.hsl(dev.hue, 1, 0.5)
+                });
+
                 num_dev_sigs += 1;
-            });
-            if (num_dev_sigs <= 0)
-                return;
-
-            let devname = (collapseAll || (dev.collapsed & collapse_bit)
-                           ? ' ▶ ' : '▼  ') + dev.name;
-
-            $(tbody).append("<tr class='device' style='background: "+dev.color+"44' id="+dev.name+"><th colspan='2'>"+devname+" ("+num_dev_sigs+" signals)"+
-                            "</th></tr>");
-            let even = false;
-            for (var i in sigs) {
-                let new_row = "<tr class='"+sigs[i][3];
-                if (even)
-                    new_row += " even";
-                if (collapseAll || (dev.collapsed & collapse_bit))
-                    new_row += " invisible";
-                new_row += "' id="+sigs[i][0]+"><td>"+sigs[i][1]+"</td>";
-                if (detail)
-                    new_row += "<td>"+sigs[i][2]+"</td>";
-                new_row += "</tr>";
-                $(tbody).append(new_row);
-                even = !even;
             }
-            if (!collapseAll && !(dev.collapsed & collapse_bit))
+
+            dev.signals.each(function(sig) {
+                // todo: check for filters
+                if (_self.direction) {
+                    if (sig.direction != _self.direction) 
+                        return ignore(sig);
+                }
+                if (sig.canvasObject && _self.ignoreCanvasObjects)
+                    return ignore(sig);
+                if (_self.regexp && !_self.regexp.test(sig.key))
+                    return hide(sig);
+                add(sig);
+            });
+
+            function print_tree(t, indent) {
+                let spaces = "";
+                for (i = 0; i < indent; i++)
+                    spaces += " ";
+                for (var i in t.branches) {
+                    let b = t.branches[i];
+                    let leaf = "";
+                    if (b.leaf)
+                        leaf = "*";
+                    console.log(spaces, i, leaf, b.num_leaves, b.oscpath);
+                    print_tree(b, indent+2);
+                }
+            }
+
+            // add device and signals to the tree
+            for (var i in sigs) {
+                let sig = sigs[i];
+                if (sig.invisible)
+                    continue;
+                var t = tree;
+                let tokens = sig.id.split('/');
+                let len = tokens.length;
+                if (len > max_depth)
+                    max_depth = len;
+                for (var j in tokens) {
+                    j = parseInt(j);
+                    let b = t.branches;
+                    if (b[tokens[j]] == null)
+                        b[tokens[j]] = {"branches": {},
+                                        "num_leaves": 0,
+                                        "oscpath": tokens.slice(0, j+1).join('/')};
+                    t.num_leaves += 1;
+                    t = b[tokens[j]];
+                    // store signal metadata in leaves
+                    if (j == len - 1) {
+                        t.leaf = sig;
+                        t.num_leaves += 1;
+                    }
+                }
+            }
+//            print_tree(tree, 0);
+
+            if (!_self.collapseAll && !(dev.collapsed & collapse_bit))
                 num_sigs += num_dev_sigs;
             num_devs += 1;
         });
+
+        let devRowType = 'odd';
+        let sigRowType = 'odd';
+        function add_tree(t, tds, target, depth) {
+            let first = true;
+            let left = _self.location == "left";
+            for (var i in t.branches) {
+                let b = t.branches[i];
+                if (!tds || !first)
+                    tds = [[b.num_leaves, i]];
+                else
+                    tds.push([b.num_leaves, i]);
+                if (b.collapsed) {
+                    console.log("collapsed!");
+                }
+                else {
+                    if (b.leaf && !b.leaf.invisible) {
+                        if (_self.location != "left")
+                            tds = tds.reverse();
+                        let line = "";
+                        let len = tds.length;
+                        let tokens = b.leaf.id.split('/');
+                        for (var j in tds) {
+                            let idx = parseInt(j);
+                            let leaf = left ? (j == len-1) : (j == 0);
+                            let device = left ? (j == 0) : (j == len-1);
+                            if (leaf && _self.expand && !left)
+                                line += "<td class='"+sigRowType+" filler'></td>";
+                            line += "<td";
+                            if (leaf) {
+                                line += " class='leaf "+sigRowType+"'";
+                                line += " id='"+b.leaf.id+"'";
+                                if (depth < max_depth)
+                                    line += " colspan="+(max_depth-depth);
+                                line += ">"+tds[j][1]+" ("+b.leaf.unit+")</td>";
+                                if (_self.expand && _self.location == "left")
+                                    line += "<td class='"+sigRowType+" filler'></td>";
+                                sigRowType = (sigRowType == 'odd') ? 'even' : 'odd';
+                            }
+                            else {
+                                let id;
+                                if (_self.location == 'left')
+                                    id = tokens.slice(0, tokens.length-len+idx+1).join('/');
+                                else
+                                    id = tokens.slice(0, tokens.length-idx).join('/');
+                                line += " id='"+id+"'";
+                                line += " rowspan="+tds[j][0];
+                                if (id.indexOf('/') == -1)
+                                    line += " class=device";
+                                line += ">"+tds[j][1]+"</td>";
+                            }
+                        }
+                        target.append("<tr class='"+devRowType+"' style='background: "+b.leaf.color+"44' id="+b.leaf.id+">"+line+"</tr>");
+                        tds = [[b.num_leaves - 1, i]];
+                    }
+                    add_tree(b, tds, target, depth + 1);
+                }
+                if (depth == 0)
+                    devRowType = (devRowType == 'odd') ? 'even' : 'odd';
+                first = false;
+            }
+        }
+        add_tree(tree, [], $(this.tbody), 0);
+        let tds = $("#"+this.id+" td");
+        tds.each(function(td) { _self.autoRotate(this); });
+        this.grow();
+
+        $(tds).off('click');
+        $(tds).on('click', function(e) {
+            if ($(e.currentTarget).hasClass('leaf')) {
+                // can't collapse leaves
+                console.log("can't collapse leaves");
+                return;
+            }
+
+            // toggle collapse
+            function collapse_node(t, a) {
+                for (var i in t.branches) {
+                    if (i != a[0])
+                        continue;
+                    let b = t.branches[i];
+                    if (a.length == 1) {
+                        let new_state = b.collapsed ? false : true;
+                        b.collapsed = new_state;
+                        let id = b.oscpath;
+                        // add/remove 'invisible' class from children
+                        let children = $("#"+_self.id+" td[id^='"+id+"/']");
+                        let num_leaves = $(children).filter('.leaf').length;
+                        // also hide/show <tr> (except first)
+                        children = $(children).add($("#"+_self.id+" tr[id^='"+id+"/']").not(":eq(0)"));
+                        let depth = (id.match(/\//g) || []).length;
+                        if (new_state) {
+                            $(children).addClass('invisible');
+                            $(e.currentTarget).attr({'colspan': max_depth - depth});
+                            e.currentTarget.innerHTML = "<div>"+i+"...</div>";
+                        }
+                        else {
+                            e.currentTarget.innerHTML = "<div>"+i+"</div>";
+                            $(children).removeClass('invisible');
+                        }
+
+                        id = id.split('/');
+                        let sel = e.currentTarget;
+                        while (id.length) {
+                            num_leaves = $("#"+_self.id+" td[id^='"+id.join('/')+"/']")
+                                              .filter('.leaf')
+                                              .not('.invisible')
+                                              .length;
+                            if (new_state)
+                                num_leaves += 1;
+                            if (num_leaves == 0)
+                                num_leaves = 1;
+                            $(sel).attr('rowspan', num_leaves);
+                            if (num_leaves > i.length / 2)
+                                $(sel).addClass('tall');
+                            else
+                                $(sel).removeClass('tall');
+                            if (!new_state) {
+                                $(sel).attr('colspan', 1);
+                            }
+                            id.pop()
+                            if (id.length)
+                                sel = $("#"+_self.id+" td[id='"+id.join('/')+"']");
+                        }
+                        return true;
+                    }
+                    return collapse_node(b, a.slice(1));
+                }
+                return false;
+            }
+            if (collapse_node(tree, $(e.currentTarget)[0].id.split('/'))) {
+                _self.grow();
+                if (_self.collapseHandler)
+                    _self.collapseHandler();
+            }
+        });
+
+        this.setSigPositions();
         this.num_devs = num_devs;
         this.num_sigs = num_sigs;
+        this.num_hidden_sigs = num_hidden_sigs;
         this.adjustRowHeight();
+        this.updateTitle();
+    }
+
+    setSigPosition(sig) {
+        let self = this;
+        if (self.direction != null && self.direction != sig.direction)
+            return;
+        if (self.ignoreCanvasObjects && sig.canvasObject)
+            return;
+
+        let row = self.getRowFromName(sig.key);
+        if (row == null) {
+            sig.hidden = true;
+            return;
+        }
+        sig.hidden = false;
+        sig.position = {
+            get left() {return row.left;},
+            set left(nl) {delete this.left; this.left = nl;},
+            get top() {return row.top;},
+            set top(nt) {delete this.top; this.top = nt;},
+            get height() {return row.height;},
+            set height(nh) {delete this.height; this.height = nh;},
+            get width() {return row.width;},
+            set width(nw) {delete this.width; this.width = nw;},
+            get x() {return row.x;},
+            set x(newx) {delete this.x; this.x = newx;},
+            get vx() {return row.vx;},
+            set vx(newx) {delete this.vx; this.vx = newx;},
+            get y() {return row.y;},
+            set y(newy) {delete this.y; this.y = newy;},
+            get vy() {return row.vy;},
+            set vy(newy) {delete this.vy; this.vy = newy;}
+        }
+    }
+
+    setSigPositions() {
+        let self = this;
+        this.graph.devices.each(function(dev) {
+            dev.signals.each(function(sig) {
+                self.setSigPosition(sig);
+            });
+        });
     }
 }
