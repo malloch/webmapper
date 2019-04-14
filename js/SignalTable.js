@@ -519,7 +519,7 @@ class SignalTable {
 
             function add(sig) {
                 let type;
-                switch (String.fromCharCode(sig.type)) {
+                switch (sig.type) {
                     case 'i':
                         type = 'int';
                         break;

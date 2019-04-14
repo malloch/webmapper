@@ -6,7 +6,6 @@ class MapProperties {
         this.mapModeCommands = {"Linear": 'linear', "Expression": 'expression' };
         this.mapModes = ["Linear", "Expression"];
         this.mapProtocols = ["UDP", "TCP"];
-        this.boundaryIcons = ["none", "right", "left", "mute", "clamp", "wrap"];
 
         $(this.container).append(
             "<div' class='topMenu' style='width:calc(75% - 170px);'>"+
@@ -41,22 +40,18 @@ class MapProperties {
             "<div id='srcRange' class='range signalControl disabled'>"+
                 "<div style='width:80px'>Src Range:</div>"+
                 "<div style='width:calc(100% - 120px)'>"+
-                    "<div style='width:24px'></div>"+
-                    "<input class='range' id='src_min' style='width:calc(50% - 34px)'></input>"+
+                    "<input class='range' id='src_min' style='width:calc(50% - 14px)'></input>"+
                     "<div id='srcRangeSwitch' class='rangeSwitch'></div>"+
-                    "<input class='range' id='src_max' style='width:calc(50% - 34px)'></input>"+
-                    "<div style='width:24px'></div>"+
+                    "<input class='range' id='src_max' style='width:calc(50% - 14px)'></input>"+
                 "</div>"+
                 "<div id='setLinear' class='setlinear'>Linear</div>"+
             "</div>"+
             "<div id='dstRange' class='range signalControl disabled'>"+
                 "<div style='width:80px'>Dest Range:</div>"+
                 "<div style='width:calc(100% - 120px)'>"+
-                    "<div id='boundary_min' class='boundary boundary_down' type='button'></div>"+
-                    "<input class='range' id='dst_min' style='width:calc(50% - 34px)'></input>"+
+                    "<input class='range' id='dst_min' style='width:calc(50% - 14px)'></input>"+
                     "<div id='dstRangeSwitch' class='rangeSwitch'></div>"+
-                    "<input class='range' id='dst_max' style='width:calc(50% - 34px)'></input>"+
-                    "<div id='boundary_max' class='boundary boundary_up' type='button'></div>"+
+                    "<input class='range' id='dst_max' style='width:calc(50% - 14px)'></input>"+
                 "</div>"+
                 "<div id='srcCalibrate' class='calibrate'>Calib</div>"+
             "</div>");
@@ -92,10 +87,6 @@ class MapProperties {
         $('.topMenu').on("click", '.protocol', function(e) {
             e.stopPropagation();
             self.setMapProperty("protocol", e.currentTarget.innerHTML);
-        });
-
-        $('.boundary').on('click', function(e) {
-            self.on_boundary(e, self);
         });
 
         $('.rangeSwitch').click(function(e) {
@@ -142,7 +133,6 @@ class MapProperties {
         $('.mode').removeClass('sel');
         $('.protocol').removeClass('sel');
         $('.topMenu input').val('');
-        $('.boundary').removeAttr('class').addClass('boundary boundary_none');
         $('.signalControl').children('*').removeClass('disabled');
         $('.signalControl').addClass('disabled');
         $('#mapPropsTitle').addClass('disabled');
@@ -168,8 +158,6 @@ class MapProperties {
         var dst_max = null;
         var src_calibrating = null;
         var dst_calibrating = null;
-        var dst_bound_min = null;
-        var dst_bound_max = null;
 
         this.graph.maps.filter(this.selected).each(function(map) {
             if (mode == null)
@@ -212,15 +200,6 @@ class MapProperties {
                 dst_calibrating = map.dst_calibrating;
             else if (dst_calibrating != map.dst_calibrating)
                 dst_calibrating = 'multiple';
-
-            if (dst_bound_min == null)
-                dst_bound_min = map.dst_bound_min;
-            else if (dst_bound_min != map.dst_bound_min)
-                dst_bound_min = 'multiple';
-            if (dst_bound_max == null)
-                dst_bound_max = map.dst_bound_max;
-            else if (dst_bound_max != map.dst_bound_max)
-                dst_bound_max = 'multiple';
         });
 
         if (mode != null) {
@@ -278,11 +257,6 @@ class MapProperties {
             $("#dstCalibrate").addClass("calibratesel");
         else if (dst_calibrating == false)
             $("#dstCalibrate").removeClass("calibratesel");
-
-        if (dst_bound_min != null)
-            this.set_boundary($("#boundary_min"), dst_bound_min, 0);
-        if (dst_bound_max != null)
-            this.set_boundary($("#boundary_max"), dst_bound_max, 1);
     }
 
     // object with arguments for the map
@@ -445,49 +419,6 @@ class MapProperties {
         return false;
     }
 
-    on_boundary(e, self) {
-        var boundaryMode = null;
-        for (var i in this.boundaryIcons) {
-            if ($(e.currentTarget).hasClass("boundary_"+this.boundaryIcons[i])) {
-                boundaryMode = this.boundaryIcons[i];
-                break;
-            }
-        }
-        if (i >= this.boundaryIcons.length)
-            return;
-
-        var is_max = (e.currentTarget.id == 'boundary_max');
-        switch (boundaryMode) {
-            case 'left':
-                if (is_max)
-                    boundaryMode = 'wrap'; // fold -> wrap
-                else
-                    boundaryMode = 'mute'; // none -> mute
-                break;
-            case 'right':
-                if (is_max)
-                    boundaryMode = 'mute'; // none -> mute
-                else
-                    boundaryMode = 'wrap'; // fold -> wrap
-                break;
-            case 'mute':
-                boundaryMode = 'clamp'; // mute -> clamp
-                break;
-            case 'clamp':
-                boundaryMode = 'fold'; // clamp -> fold
-                break;
-            case 'wrap':
-                boundaryMode = 'none'; // wrap -> none
-                break;
-            default:
-                break;
-        }
-        if (boundaryMode != null)
-            self.setMapProperty(is_max ? "dst_bound_max" : 'dst_bound_min',
-                                boundaryMode);
-        e.stopPropagation();
-    }
-
     notify(msg) {
         var li = document.createElement('li');
         li.className = 'notification';
@@ -496,27 +427,6 @@ class MapProperties {
         setTimeout(function() {
             $(li).fadeOut('slow', function() { $(li).remove();});
         }, 5000);
-    }
-
-    set_boundary(boundaryElement, value, ismax) {
-        for (var i in this.boundaryIcons)
-            boundaryElement.removeClass("boundary_"+this.boundaryIcons[i]);
-
-        if (value == 'none') { // special case, icon depends on direction
-            if (ismax)
-                boundaryElement.addClass('boundary_right');
-            else
-                boundaryElement.addClass('boundary_left');
-        }
-        else if (value == 'fold') { // special case, icon depends on direction
-            if (ismax)
-                boundaryElement.addClass('boundary_left');
-            else
-                boundaryElement.addClass('boundary_right');
-        }
-        else if (value != null) {
-            boundaryElement.addClass('boundary_'+value);
-        }
     }
 
     /**

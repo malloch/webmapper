@@ -650,10 +650,6 @@ function Graph() {
                     dst.minimum = c.dstMin;
                 if (c.dstMax != null)
                     dst.maximum = c.dstMax;
-                if (c.boundMin != null)
-                    dst.bound_min = c.boundMin;
-                if (c.boundMax != null)
-                    dst.bound_max = c.boundMax;
 
                 if (c.mode == 'reverse') {
                     map.mode = 'expression';
@@ -691,14 +687,6 @@ function Graph() {
                 console.log("error adding map from file:", map);
                 continue;
             }
-            if (map.sources[0].bound_min)
-                map.src_bound_min = map.sources[0].bound_min;
-            if (map.sources[0].bound_max)
-                map.src_bound_min = map.sources[0].bound_max;
-            if (map.destinations[0].bound_min)
-                map.dst_bound_min = map.destinations[0].bound_min;
-            if (map.destinations[0].bound_max)
-                map.dst_bound_min = map.destinations[0].bound_max;
             if (map.sources[0].calibrating)
                 map.src_calibrating = map.sources[0].calibrating;
             if (map.destinations[0].calibrating)

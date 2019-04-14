@@ -292,36 +292,6 @@ form {
     cursor: pointer;
 }
 
-/* Just the boundary icons */
-.boundary {
-    width: 24px;
-    height: 24px;
-    background: url(/images/boundary_icons_white.png);
-    background-repeat: no-repeat;
-    cursor: pointer;
-    border: none;
-    margin-top: -5px;
-    position: relative;
-    top: 2px;
-}
-.boundary_none {
-    background-position: 0px 0px;
-}
-.boundary_right {
-    background-position: -24px 0px;
-}
-.boundary_left {
-    background-position: -48px 0px;
-}
-.boundary_mute {
-    background-position: -72px 0px;
-}
-.boundary_clamp {
-    background-position: -96px 0px;
-}
-.boundary_wrap {
-    background-position: -120px 0px;
-}
 /****************/
 
 #saveButton, #loadButton {

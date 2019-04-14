@@ -66,12 +66,6 @@ If a map or maps are selected, the *map property editor* becomes active. This pa
     * **Calib:** Toggle `calibration` to incoming values.
 * **Dst Range:** view and edit the range (minimum and maximum values) for each destination of the selected map. New maps will have these values autopopulated from the source signal's minimum and maximum properties if they are specified. When a map is in `Linear Mode`, these values will be used to calculate an interpolation function.
     * **Range Switch:** the double arrow button located between the Src Range fields can be used to swap the minimum and maximum.
-    * **Boundary Modes:** buttons beside fields for minimum and maximum can be used to switch the `Boundary mode` in case the outgoing value exceeds the specified range:
-        * `None` Value is passed through unchanged
-        * `Mute` Value is muted if it exceeds the range boundary
-        * `Clamp` Value is limited to the range boundary
-        * `Fold` Value continues in opposite direction
-        * `Wrap` Value appears as modulus offset at the opposite boundary
 
 ### Global Commands
 
