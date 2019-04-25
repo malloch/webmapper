@@ -5,9 +5,9 @@
 'use strict';
 
 class ListView extends View {
-    constructor(frame, tables, canvas, graph, tooltip) {
+    constructor(frame, tables, canvas, graph, tooltip, pie) {
         super('list', frame, {'left': tables.left, 'right': tables.right},
-              canvas, graph, tooltip, ListMapPainter);
+              canvas, graph, tooltip, pie, ListMapPainter);
 
         this.setup();
     }
@@ -43,8 +43,8 @@ class ListView extends View {
             remove_object_svg(dev);
         });
 
-        this.tables.left.collapseHandler = function() {self.drawMaps()};
-        this.tables.right.collapseHandler = function() {self.drawMaps()};
+        this.tables.left.resizeHandler = function() {self.drawMaps()};
+        this.tables.right.resizeHandler = function() {self.drawMaps()};
 
         this.escaped = false;
 
@@ -121,59 +121,104 @@ class ListView extends View {
 
 class ListMapPainter extends MapPainter
 {
-    constructor(map, canvas)
+    constructor(map, canvas, frame, graph)
     {
-        super(map, canvas);
+        super(map, canvas, frame, graph);
     }
 
-    updatePaths()
+    oneToOne(src, dst, i)
     {
-        let src = this.map.src.position;
-        let dst = this.map.dst.position;
-
+        // skip maps if src or dst y is zero, due to filtering
         if (!src.y || !dst.y) {
-            this.hide();
+            this.pathspecs[i] = null;
             return;
         }
-        this.show();
 
         if (Math.abs(src.x - dst.x) < 1)
-            this.vertical(src, dst);
+            this.vertical(src, dst, i);
         else if (Math.abs(src.y - dst.y) < 1)
-            this.horizontal(src, dst);
-        else this.betweenTables(src, dst);
+            this.horizontal(src, dst, i);
+        else this.betweenTables(src, dst, i);
     }
 
-    betweenTables(src, dst) 
+    betweenTables(src, dst, i, dstPos)
     {
-        let mpx = (src.x + dst.x) * 0.5;
-        this.pathspecs[0] = [['M', src.x, src.y],
-                             ['C', mpx, src.y, mpx, dst.y, dst.x, dst.y]];
+        let mpx = dstPos ? dst.x : (src.x + dst.x) * 0.5;
+        this.pathspecs[i] = [['M', src.x, src.y],
+                            ['C', mpx, src.y, mpx, dst.y, dst.x, dst.y]];
     }
 
-    vertical(src, dst) 
+    vertical(src, dst, i) 
     {
         // signals are inline vertically
-        let minoffset = 30;
-        let maxoffset = 200;
-        let offset = Math.abs(src.y - dst.y) * 0.5;
-        if (offset > maxoffset) offset = maxoffset;
-        if (offset < minoffset) offset = minoffset;
+        let offset = this.offset(src.y, dst.y);
         let ctlx = src.x + offset * src.vx;
-        this.pathspecs[0] = [['M', src.x, src.y], 
-                             ['C', ctlx, src.y, ctlx, dst.y, dst.x, dst.y]];
+        this.pathspecs[i] = [['M', src.x, src.y], 
+                            ['C', ctlx, src.y, ctlx, dst.y, dst.x, dst.y]];
     }
 
-    horizontal(src, dst) 
+    horizontal(src, dst, i) 
     {
         // signals are inline horizontally
-        let minoffset = 30;
-        let maxoffset = 200;
-        let offset = Math.abs(src.x - dst.x) * 0.5;
+        let offset = this.offset(src.x, dst.x);
+        let ctly = src.y + offset * src.vy;
+        this.pathspecs[i] = [['M', src.x, src.y],
+                            ['C', src.x, ctly, dst.x, ctly, dst.x, dst.y]];
+    }
+
+    offset(a, b, minoffset = 30, maxoffset = 200)
+    {
+        let offset = Math.abs(a - b) * 0.5;
         if (offset > maxoffset) offset = maxoffset;
         if (offset < minoffset) offset = minoffset;
-        let ctly = src.y + offset * src.vy;
-        this.pathspecs[0] = [['M', src.x, src.y],
-                             ['C', src.x, ctly, dst.x, ctly, dst.x, dst.y]];
+        return offset;
+    }
+
+    updateAttributes()
+    {
+        let num_srcs = this.map.srcs.length;
+        if (num_srcs > 1)
+        {
+            let hidden = true;
+            this._defaultAttributes(num_srcs + 2);
+            let i = 0;
+            for (; i < num_srcs; ++i)
+            {
+                hidden = hidden && this.map.srcs[i].hidden;
+                if (this.map.srcs[i].hidden) this.attributes[i]['stroke'] = 'none';
+                this.attributes[i]['arrow-end'] = 'none';
+            }
+
+            if (hidden)
+            {
+                this.attributes[i].stroke = 'none';
+                this.attributes[i+1].stroke = 'none';
+            }
+            else
+            {
+                this.attributes[i+1].fill = this.map.selected ? 
+                                            MapPainter.selectedColor : 
+                                            MapPainter.defaultColor;
+                this.attributes[i+1]['arrow-end'] = 'none'
+            }
+        }
+        else this._defaultAttributes();
+    }
+
+    getNodePosition() {
+        return super.getNodePosition(50);
     }
 }
+
+var ListViewSlices =
+[
+    {angle: 90, color: 'none', items: [
+        ConvergentMappingSlices[0].items[0], 
+        ConvergentMappingSlices[1].items[0], 
+        ConvergentMappingSlices[2].items[0], 
+        ConvergentMappingSlices[3].items[0]
+    ]},
+    {angle: 270, color: 'none'},
+    {angle: 271, color: 'none'},
+    {angle: 272, color: 'none'}
+];

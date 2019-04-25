@@ -10,16 +10,14 @@
 // type() // returns view type
 
 class View {
-    constructor(type, frame, tables, canvas, graph, tooltip, painter) {
+    constructor(type, frame, tables, canvas, graph, tooltip, pie, painter) {
         this.type = type;
         this.frame = frame;
         this.tables = tables,
         this.canvas = canvas;
         this.graph = graph;
         this.tooltip = tooltip;
-
-        this.srcregexp = null;
-        this.dstregexp = null;
+        this.pie = pie;
 
         this.hoverDev = null;
         this.draggingFrom = null;
@@ -29,6 +27,7 @@ class View {
         this.animationTime = 500;
 
         this.newMap = null;
+        this.converging = null;
 
         this.mapPane = {'left': frame.left,
                         'top': frame.top,
@@ -50,11 +49,6 @@ class View {
         this.origin = [this.mapPane.cx, this.mapPane.cy];
 
         this.sigLabel = null;
-
-        if (typeof painter === "undefined")
-            this.setMapPainter(MapPainter);
-        else
-            this.setMapPainter(painter);
     }
 
     // Subclasses should override the behavior of _resize rather than this one
@@ -81,8 +75,10 @@ class View {
     }
 
     updateDevices(func) {
-        for (var i in this.tables)
-            this.tables[i].update();
+        for (var i in this.tables) {
+            if (!this.tables[i].hidden)
+                this.tables[i].update();
+        }
 
         let self = this;
         let devIndex = 0;
@@ -91,9 +87,10 @@ class View {
             let sigIndex = 0;
             dev.signals.each(function(sig) {
                 sig.hidden = (dev.hidden == true);
-                let regexp = sig.direction == 'output' ? self.srcregexp : self.dstregexp;
-                if (dev.hidden || (regexp && !regexp.test(sig.key))) {
-                    remove_object_svg(sig);
+                let re = sig.direction == 'output' ? self.graph.srcRE : self.graph.dstRE;
+                if (dev.hidden || (re && !re.test(sig.key))) {
+                    if (sig.view)
+                        sig.view.hide();
                     sig.index = null;
                     return;
                 }
@@ -106,6 +103,8 @@ class View {
                     self.setSigDrag(sig);
                     self.setSigHover(sig);
                 }
+                else
+                    sig.view.show();
             });
             // if no signals visible, hide device also
             if (dev.hidden || !sigIndex) {
@@ -317,18 +316,8 @@ class View {
                     return;
                 }
                 self.snappingTo = sig;
-                let src = self.draggingFrom.position;
-                if (!src.x && src[0].x)
-                    src = src[0];
-                let dst = sig.position;
-                if (!dst.x && dst[0].x)
-                    dst = dst[0];
-                let path = [['M', src.x, src.y],
-                            ['S', (src.x + dst.x) * 0.6, (src.y + dst.y) * 0.4,
-                             dst.x, dst.y]];
-                let len = Raphael.getTotalLength(path);
-                path = Raphael.getSubpath(path, 12, len - 12);
-                self.newMap.attr({'path': path});
+                self.newMap.dst = sig;
+                self.newMap.view.draw(0);
             },
             function() {
                 self.snappingTo = null;
@@ -341,10 +330,22 @@ class View {
 
     setSigDrag(sig) {
         let self = this;
-        sig.view.mouseup(function() {
-            if (self.draggingFrom && self.snappingTo)
+
+        function finish(convergent_method) {
+            if (!self.escaped && self.draggingFrom && self.converging && convergent_method)
+                mapper.converge(self.draggingFrom.key, self.converging, convergent_method);
+            else if (self.draggingFrom && self.snappingTo)
                 mapper.map(self.draggingFrom.key, self.snappingTo.key);
-        });
+            self._unsnap_to_map();
+            self.draggingFrom = null;
+            if (self.newMap) {
+                self.newMap.view.remove();
+                self.newMap = null;
+            }
+            self.pie.hide();
+        }
+
+        let upx, upy;
         sig.view.undrag();
         sig.view.drag(
             function(dx, dy, x, y, event) {
@@ -353,37 +354,53 @@ class View {
                 if (self.escaped) {
                     return;
                 }
-                x -= self.frame.left;
+                //x -= self.frame.left;
                 y -= self.frame.top;
-                let src = self.draggingFrom.position;
-                if (!src.x && src[0].x)
-                    src = src[0];
-                let path = [['M', src.x, src.y],
-                            ['S', (src.x + x) * 0.6, (src.y + y) * 0.4, x, y]];
+                upx = x; upy = y;
                 if (!self.newMap) {
-                    self.newMap = self.canvas.path(path);
-                    self.newMap.attr({'stroke': 'white',
-                                      'stroke-width': MapPath.strokeWidth,
-                                      'stroke-opacity': 1,
-                                      'fill': 'none',
-                                      'arrow-start': 'none',
-                                      'arrow-end': 'block-wide-long'});
+                    self.newMap =
+                        {
+                            'srcs': [sig],
+                            'dst': {'position': {'x': x, 'y': y}, 'device': {'hidden' : false}, 'view': {}},
+                            'selected': true,
+                            'hidden': false
+                        };
+                    self.newMap.view = new self.mapPainter(self.newMap, self.canvas,
+                                                           self.frame, self.graph);
                 }
-                else
-                    self.newMap.attr({'path': path});
+                else {
+                    if (!self.snapping_to_map()) {
+                        let snapped = self._get_map_snap(x-dx, y-dy, x, y);
+                        if (snapped !== null) self._snap_to_map(snapped);
+                    }
+                    if (!self._continue_map_snap(x, y))
+                    {
+                        self._unsnap_to_map();
+                        self.newMap.dst.position = {'x': x, 'y': y};
+                    }
+                }
+                self.newMap.view.draw(0);
             },
             function(x, y, event) {
                 self.escaped = false;
                 self.draggingFrom = sig;
             },
             function(x, y, event) {
-                self.draggingFrom = null;
-                if (self.newMap) {
-                    self.newMap.remove();
-                    self.newMap = null;
-                }
+                if (self.snapping_to_map()) self._start_converging_pie_menu(upx, upy, finish);
+                else finish();
             }
         );
+    }
+
+    setAllSigHandlers() {
+        let self = this;
+        this.graph.devices.each(dev =>
+            dev.signals.each(sig => {
+                if (!sig.view) return;
+                self.setSigHover(sig);
+                self.setSigDrag(sig);
+            })
+        );;
     }
 
     updateSignals(func) {
@@ -394,17 +411,19 @@ class View {
                     sig.view.stop();
 
                 // check regexp
-                let regexp = (sig.direction == 'output'
-                              ? self.srcregexp : self.dstregexp);
-                if (sig.hidden || (regexp && !regexp.test(sig.key))) {
-                    remove_object_svg(sig);
+                let re = (sig.direction == 'output'
+                          ? self.graph.srcRE : self.graph.dstRE);
+                if (sig.hidden || (re && !re.test(sig.key))) {
+                    if (sig.view)
+                        sig.view.hide();
                     sig.index = null;
                     sig.position = null;
                     return;
                 }
 
                 if (func && func(sig)) {
-                    remove_object_svg(sig);
+                    if (sig.view)
+                        sig.view.hide();
                     return;
                 }
 
@@ -415,6 +434,7 @@ class View {
                     self.setSigDrag(sig);
                     self.setSigHover(sig);
                 }
+                sig.view.show();
             });
         });
     }
@@ -456,7 +476,7 @@ class View {
                 if (!self.draggingFrom) {
                     self.tooltip.showTable(
                         "Map", {
-                            source: map.src.key,
+                            source: map.srcs.map(s => s.key).join(', '),
                             destination: map.dst.key,
                             mode: map.mode,
                             expression: map.expression,
@@ -475,7 +495,7 @@ class View {
     updateMaps() {
         let self = this;
         this.graph.maps.each(function(map) {
-            map.hidden = map.src.hidden || map.dst.hidden;
+            map.hidden = map.srcs.some(s => s.hidden) || map.dst.hidden;
             if (map.hidden) {
                 remove_object_svg(map);
                 return;
@@ -487,84 +507,11 @@ class View {
         });
     }
 
-    _tableRow(sig) {
-        let row = null;
-        for (var i in this.tables) {
-            row = this.tables[i].getRowFromName(sig.key);
-            if (row)
-                break;
-        }
-        return row;
-    }
-
-    getMapPath(map) {
-        if (this.tables) return this._getMapPathForTables(map);
-        else return this._getMapPathForSigNodes(map);
-    }
-
-    _getMapPathForTables(map) {
-        let src = this._tableRow(map.src);
-        let dst = this._tableRow(map.dst);
-        if (!src || !dst)
-            return null;
-        if (src.vx == dst.vx) {
-            // same table
-            if (map.view) map.view.attr({'arrow-end': 'block-wide-long'});
-            return MapPath.sameTable(src, dst, this.mapPane);
-        }
-        else if (src.vy != dst.vy) {
-            // constrain positions to pane to indicate offscreen maps
-            // todo: make function
-            if (src.x < this.leftTableLeft) {
-                // constrain to bounds
-                // display a white dot
-            }
-            // draw intersection between tables
-            if (map.view) map.view.attr({'arrow-end': 'none',
-                                         'stroke-linejoin': 'round'});
-            if (src.vx < 0.0001) {
-                return [['M', src.left + MapPath.strokeWidth, dst.y],
-                        ['L', src.left + src.width - MapPath.strokeWidth + 2, dst.top + MapPath.strokeWidth],
-                        ['l', 0, dst.height - MapPath.strokeWidth - 2],
-                        ['Z']];
-            }
-            else {
-                return [['M', dst.x, src.top + MapPath.strokeWidth + 1],
-                        ['L', dst.left + MapPath.strokeWidth, src.top + src.height - MapPath.strokeWidth + 2],
-                        ['l', dst.width - MapPath.strokeWidth - 2, 0],
-                        ['Z']]
-            }
-        }
-        else {
-            // draw bezier curve between signal tables
-            if (map.view) map.view.attr({'arrow-end': 'block-wide-long'});
-            return MapPath.betweenTables(src, dst);
-        }
-    }
-
-    _getMapPathForSigNodes(map) {
-        let src = map.src.position
-        let dst = map.dst.position;
-        if (!src || !dst)
-            return null;
-
-        // calculate midpoint
-        let mpx = (src.x + dst.x) * 0.5;
-        let mpy = (src.y + dst.y) * 0.5;
-
-        // inflate midpoint around origin to create a curve
-        mpx = mpx + (mpx - this.origin[0]) * 0.2;
-        mpy = mpy + (mpy - this.origin[1]) * 0.2;
-
-        return [['M', src.x, src.y],
-                ['S', mpx, mpy, dst.x, dst.y]];
-    }
-
     drawMaps(duration, signal) {
         this.graph.maps.each(function(map) {
             if (!map.view)
                 return;
-            if (signal && map.src != signal && map.dst != signal)
+            if (signal && map.srcs.every(s => s != signal) && map.dst != signal)
                 return;
             else map.view.draw(duration);
         });
@@ -651,26 +598,34 @@ class View {
         this.canvas.pan.y = 0;
     }
 
-    filterSignals(direction, text) {
+    filterSignals(direction) {
         direction = direction == 'src' ? 'output' : 'input';
         let index, updated = false;
-        if (this.tables) {
-            for (index in this.tables) {
-                let table = this.tables[index];
-                if (!table.direction || table.direction == direction)
-                    updated |= table.filterByName(text);
-            }
-            if (updated) {
+        switch (this.type) {
+            case 'list':
+            case 'grid':
+                for (index in this.tables) {
+                    let table = this.tables[index];
+                    if (!table.direction || table.direction == direction)
+                        updated |= table.filterByName();
+                }
+                if (updated) {
+                    this.draw(0);
+                }
+                break;
+            case 'canvas':
+                // TODO: need to filter canvas objects also
+                this.tables.left.filterByName();
                 this.draw(0);
-            }
-        }
-        else {
-            if (direction == 'output')
-                this.srcregexp = text ? new RegExp(text, 'i') : null;
-            else
-                this.dstregexp = text ? new RegExp(text, 'i') : null;
-            this.update('signals');
-            this.draw(0);
+                break;
+            case 'graph':
+            case 'hive':
+            case 'parallel':
+                this.update('signals');
+                this.draw();
+                break;
+            default:
+                break;
         }
     }
 
@@ -689,17 +644,19 @@ class View {
 
     setTableDrag() {
         let self = this;
-        // dragging maps from table
-        // if another table exists, we can drag between them
-        // can also drag map to self
-        // if tables are orthogonal we can simply drag to 2D space between them
-        // if no other table exists, can drag out signal representation
+        // dragging from table to table to make maps
+        // the signal associated with the row where the dragging starts becomes the 
+        // map's source signal, and if the user releases the drag over any other signal
+        // then it becomes the destination for the map.
         $('.tableDiv').off('mousedown');
         $('.tableDiv').on('mousedown', 'td.leaf', function(e) {
+            if (self.draggingFrom)
+                return;
             self.escaped = false;
 
             let src_row = $(this).parent('tr')[0];
             let src_table = null;
+            let dst_table = null;
             switch ($(src_row).parents('.tableDiv').attr('id')) {
                 case "leftTable":
                     src_table = self.tables.left;
@@ -712,15 +669,24 @@ class View {
                     return;
             }
 
-            $('#svgDiv').one('mouseenter.drawing', function() {
+            $('#svgDiv').one('mouseenter.drawing', function(e) {
                 deselectAllMaps(self.tables);
                 var src = src_table.getRowFromName(src_row.id);
                 var dst = null;
                 self.draggingFrom = self.graph.find_signal(src.id);
 
-                self.newMap = {'src': self.draggingFrom, 'dst': null};
+                self.newMap = 
+                {
+                    'srcs': [self.draggingFrom],
+                    'dst': {position: {x: 0, y: 0}},
+                    'selected': true
+                };
                 self.newMap.view = new self.mapPainter(self.newMap, self.canvas,
                                                        self.frame, self.graph);
+
+                let prev_svgx = e.pageX - self.frame.left;
+                let prev_svgy = e.pageY - self.frame.top;
+                let selected_path, selected_len, selected_pos;
 
                 $('svg, .displayTable tbody tr').on('mousemove.drawing', function(e) {
                     // clear table highlights
@@ -737,50 +703,85 @@ class View {
 
                     let x = e.pageX;
                     let y = e.pageY;
+
                     dst = null;
                     self.newMap.dst = null;
-                    let dst_table = null;
 
                     for (index in self.tables) {
                         // check if cursor is within snapping range
-                        dst = self.tables[index].getRowFromPosition(x, y, 0.2);
-                        if (dst) {
-                            if (dst.id !== src.id) {
-                                self.newMap.dst = self.graph.find_signal(dst.id);
-                                self.tables[index].highlightRow(dst, false);
-                            }
-                            else {
-                                dst = null;
-                            }
-                            break;
+                        let snap_factor = 0.05;
+                        dst = self.tables[index].getRowFromPosition(x, y, snap_factor);
+                        if (!dst) continue;
+                        if (dst.id !== src.id) {
+                            self.newMap.dst = self.graph.find_signal(dst.id);
+                            self.tables[index].highlightRow(dst, false);
                         }
+                        else {
+                            dst = null;
+                        }
+                        break;
                     }
 
+                    let svgx = x - self.frame.left;
+                    let svgy = y - self.frame.top;
                     if (!self.newMap.dst) {
-                        self.newMap.dst = {position: {'x': x - self.frame.left,
-                                                      'y': y - self.frame.top}};
+                        if (!self.snapping_to_map()) {
+                            let snapped = self._get_map_snap(prev_svgx, prev_svgy, svgx, svgy);
+                            if (snapped !== null) {
+                                self._snap_to_map(snapped); // sets dst to snapped map pos
+                            }
+                        }
+                        if (!self._continue_map_snap(svgx, svgy)) {
+                            self._unsnap_to_map();
+                            self.newMap.dst = {position: {'x': svgx, 'y': svgy}};
+                        }
                     }
+                    else self._unsnap_to_map(); // snapping to table
+
                     self.newMap.view.draw(0);
                     src_table.highlightRow(src, false);
+                    let dx = prev_svgx - svgx; let dy = prev_svgy - svgy;
+                    if (dx*dx + dy*dy > 100) {
+                        prev_svgx = svgx;
+                        prev_svgy = svgy;
+                    }
                 });
-                $(document).on('mouseup.drawing', function(e) {
-                    $(document).off('.drawing');
-                    $('svg, .displayTable tbody tr').off('.drawing');
-                    if (!self.escaped && dst && dst.id) {
-                        mapper.map(src.id, dst.id);
-                        self.graph.maps.add({'src': self.graph.find_signal(src.id),
-                                             'dst': self.graph.find_signal(dst.id),
-                                             'key': src.id + '->' + dst.id,
-                                             'status': 'staged'});
+                $(document).one('mouseup.drawing', function(e) {
+                    function finish(convergent_method) {
+                        if (!self.escaped) {
+                            if (convergent_method !== null && self.snapping_to_map()) 
+                                mapper.converge(src.id, self.converging, convergent_method);
+                            else if (src && src.id && dst && dst.id) 
+                                mapper.map(src.id, dst.id);
+                        }
+                        // clean up
+                        self.tables.left.highlightRow(null, true);
+                        self.tables.right.highlightRow(null, true);
+                        self.draggingFrom = null;
+                        self.pie.hide();
+                        if (self.newMap) {
+                            self.newMap.view.remove();
+                            self.newMap = null;
+                        }
+                        if (self.snapping_to_map()) {
+                            self._unsnap_to_map();
+
+                            // **required so that you can keep making maps afterwards...
+                            self.setTableDrag(); 
+                        }
+                        $('svg, .displayTable tbody tr').off('mousemove.drawing');
                     }
-                    // clear table highlights
-                    self.tables.left.highlightRow(null, true);
-                    self.tables.right.highlightRow(null, true);
-                    self.draggingFrom = null;
-                    if (self.newMap) {
-                        self.newMap.view.remove();
-                        self.newMap = null;
+                    if (self.snapping_to_map())
+                    {
+                        // switch to pie menu interaction
+                        // **so clicking convergent option doesn't start making new map
+                        $('.tableDiv').off('mousedown'); 
+                        
+                        let x = e.pageX - self.frame.left;
+                        let y = e.pageY - self.frame.top;
+                        self._start_converging_pie_menu(x, y, finish);
                     }
+                    else finish();
                 });
             });
             $(document).one('mouseup.drawing', function(e) {
@@ -788,6 +789,92 @@ class View {
                 self.draggingFrom = null;
             });
         });
+    }
+
+    snapping_to_map()
+    {
+        return this.converging !== null
+    }
+
+    _start_converging_pie_menu(x, y, cb)
+    {
+        function finish(convergent_method) {
+            $(document).off('.drawing');
+            $('svg, .displayTable tbody tr').off('.drawing');
+            cb(convergent_method);
+        }
+
+        let strong = false;
+        let convergent_method = null;
+        let self = this;
+        function get_convergent_option(e) {
+            let x = e.pageX - self.frame.left;
+            let y = e.pageY - self.frame.top;
+            convergent_method = self.pie.selection(x, y, strong);
+        }
+
+        this.pie.position(x, y);
+        this.pie.show();
+
+        $(document).off('.drawing');
+        $(document).on('mousedown.drawing', function(e) {
+            if (self.escaped) return finish(convergent_method);
+            strong = true;
+            get_convergent_option(e);
+        });
+        $(document).on('mouseup.drawing', function(e) {
+            finish(convergent_method);
+        });
+
+        $('svg, .displayTable tbody tr').off('.drawing');
+        $('svg, .displayTable tbody tr').on('mousemove.drawing', function(e) {
+            if (self.escaped) return finish(convergent_method);
+            get_convergent_option(e);
+        });
+    }
+
+    _get_map_snap(x1, y1, x2, y2)
+    {
+        let converging = null;;
+        this.graph.maps.each(function(map) {
+            if (converging !== null) return;
+            if (map.view && map.view.edge_intersection(x1, y1, x2, y2))
+                converging = map;
+        });
+        return converging;
+    }
+
+    _map_snap_position(map)
+    {
+        let selected_path = map.view.intersected;
+        let selected_len = selected_path.getTotalLength();
+        return selected_path.getPointAtLength(selected_len / 2);
+    }
+
+    _snap_to_map(snap_map)
+    {
+        this.graph.maps.each(map => map.selected = false);
+        if (this.snapping_to_map()) this.converging.view.draw(0); // unhighlight
+        this.converging = snap_map;
+        this.converging.selected = true;
+        this.converging.view.draw(0);
+        this.newMap.dst = {position: this._map_snap_position(this.converging)}
+    }
+
+    _continue_map_snap(x, y, snapdist = 50)
+    {
+        if (!this.snapping_to_map()) return false; // can't continue if haven't started
+        let cp = this.converging.view.closest_point(x, y);
+        if (cp.distance < snapdist) return true;
+        return false;
+    }
+
+    _unsnap_to_map()
+    {
+        if (!this.snapping_to_map()) return; // can't unsnap if not snapped
+        this.converging.selected = false;
+        this.converging.view.draw(0);
+        this.converging = null;
     }
 
     cleanup() {
@@ -802,8 +889,8 @@ class View {
     // the new painter. This should be called rather than setting the mapPainter
     // property of this manually, which does not update the painter owned by
     // each map
-    setMapPainter(newpainterclass) {
-        this.mapPainter = newpainterclass;
+    setMapPainter(painter) {
+        this.mapPainter = (painter === "undefined") ? MapPainter : painter;
         let self = this;
         this.graph.maps.each(function(map) {
             if (!map.view) return;

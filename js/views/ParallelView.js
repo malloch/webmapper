@@ -5,8 +5,8 @@
 'use strict';
 
 class ParallelView extends View {
-    constructor(frame, tables, canvas, graph, tooltip) {
-        super('parallel', frame, tables, canvas, graph, tooltip,
+    constructor(frame, tables, canvas, graph, tooltip, pie) {
+        super('parallel', frame, tables, canvas, graph, tooltip, pie,
               ParallelMapPainter);
 
         this.pan = this.canvasPan;
@@ -18,6 +18,7 @@ class ParallelView extends View {
 
     setup() {
         this.setMapPainter(ParallelMapPainter);
+        this.setAllSigHandlers();
 
         // hide tables
         this.tables.left.adjust(this.frame.width * -0.4, 0, 0,
@@ -77,6 +78,7 @@ class ParallelView extends View {
             // assign position along line
             sig.position.x = x;
             sig.position.y = y - sigInc * (sig.index);
+            sig.position.vx = sig.position.x < self.frame.width / 2 ? 1 : -1;
             self.drawSignal(sig, duration);
         });
     }
@@ -159,29 +161,26 @@ class ParallelView extends View {
     }
 }
 
-class ParallelMapPainter extends MapPainter
+class ParallelMapPainter extends ListMapPainter
 {
-    constructor(map, canvas, frame) { super(map, canvas, frame); }
-
-    updateAttributes() {
-        this._defaultAttributes();
+    constructor(map, canvas, frame, graph) {
+        super(map, canvas, frame, graph); 
         this.shortenPath = 12;
     }
 
-    updatePaths() {
-        let src = this.map.src.position;
-        let dst = this.map.dst.position;
-
-        if (src.x == dst.x) {
-            // signals belong to same device
-            let offsetx = src.x + (src.y - dst.y) * 0.5;
-            this.pathspecs[0] = [['M', src.x, src.y],
-                                 ['C', offsetx, src.y, offsetx, dst.y, dst.x, dst.y]];
+    getNodePosition()
+    {
+        // adjust node x so that it won't overlap with a device
+        let node = super.getNodePosition();
+        let sigs = this.map.srcs.concat([this.map.dst]);
+        for (let s of sigs)
+        {
+            if (Math.abs(node.x - s.position.x) < 50) 
+            {
+                node.x += 50;
+                node.y += 50;
+            }
         }
-        else {
-            let mpx = (src.x + dst.x) * 0.5;
-            this.pathspecs[0] = [['M', src.x, src.y],
-                                 ['C', mpx, src.y, mpx, dst.y, dst.x, dst.y]];
-        }
+        return node;
     }
 }

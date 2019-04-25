@@ -182,31 +182,56 @@ EdgeArray.prototype = {
     },
 
     add : function(obj) {
-//        console.log(this.obj_type+'s.add', obj);
+        // console.log(this.obj_type+'s.add', obj.key, obj);
         let key = obj.key;
+        let id = obj.id;
         if (!key)
             return null;
 
-        if (key in this.contents) {
-            let prop, existing = this.contents[key];
-            let updated = false;
-            // copy properties from update
-            for (prop in obj) {
-                if (obj.hasOwnProperty(prop)
-                    && !is_equal(existing[prop], obj[prop])) {
-                    existing[prop] = obj[prop];
-                    updated = true;
+        let existing = this.contents[key];
+        if (typeof id !== 'undefined') {
+            for (let i in this.contents) {
+                let edge = this.contents[i];
+                if (edge.id == id) {
+                    if (!existing) {
+                        existing = edge;
+                        this.contents[key] = existing;
+                        delete this.contents[existing.key]
+                        break;
+                    }
+                    else if (existing !== edge) {
+                        this._merge(existing, edge);
+                        this.remove(this.contents[i]);
+                    }
                 }
             }
-            if (updated && this.cb_func)
-                this.cb_func('modified', this.obj_type, existing);
+        }
+        if (existing) {
+            this._merge(existing, obj);
         }
         else {
             this.contents[key] = obj;
             if (this.cb_func)
                 this.cb_func('added', this.obj_type, this.contents[key]);
         }
+        // console.log(this.obj_type+"s contents: ", this.contents);
         return this.contents[key];
+    },
+
+    _merge : function(existing, obj) {
+        // copy properties from update
+        let prop;
+        let updated = false;
+        for (prop in obj) {
+            if (obj.hasOwnProperty(prop)
+                && !is_equal(existing[prop], obj[prop])) {
+                existing[prop] = obj[prop];
+                updated = true;
+            }
+        }
+        if (updated && this.cb_func) {
+            this.cb_func('modified', this.obj_type, existing);
+        }
     },
 
     remove : function(obj) {
@@ -270,7 +295,7 @@ function Graph() {
         let maps = this.maps;
         dev.signals.each(function(sig) {
             maps.each(function(map) {
-                if (sig == map.src || sig == map.dst)
+                if (map.srcs.indexOf(sig) >= 0 || sig == map.dst)
                     maps.remove(map);
             });
         });
@@ -308,6 +333,7 @@ function Graph() {
         return dev ? dev.signals.find(String(name.join('/'))) : null;
     }
     this.add_maps = function(cmd, maps) {
+        // TODO: check for convergent maps and add appropriate links
         let self = this;
         findSig = function(name) {
             name = name.split('/');
@@ -326,14 +352,14 @@ function Graph() {
             return dev.signals.find(name);
         }
         for (var i in maps) {
-            let src = findSig(maps[i].src);
+            let srcs = maps[i].srcs.map(s => findSig(s));
             let dst = findSig(maps[i].dst);
-            if (!src || !dst) {
+            if (!srcs.every(e => e) || !dst) {
                 console.log("error adding map: couldn't find signals",
-                            maps[i].src, maps[i].dst);
+                            maps[i].srcs, maps[i].dst);
                 return;
             }
-            maps[i].src = src;
+            maps[i].srcs = srcs;
             maps[i].dst = dst;
 //            maps[i].status = 'active';
             let map = this.maps.add(maps[i]);
@@ -342,35 +368,38 @@ function Graph() {
                 return;
             }
 
-            let link_key;
-            let rev = false;
-            if (src.device.name < dst.device.name)
-                link_key = src.device.name + '<->' + dst.device.name;
-            else {
-                link_key = dst.device.name + '<->' + src.device.name;
-                rev = true;
-            }
-            let link = this.links.find(link_key);
-            if (!link) {
-                link = this.links.add({'key': link_key,
-                                       'src': rev ? dst.device : src.device,
-                                       'dst': rev ? src.device : dst.device,
-                                       'maps': [map.key],
-                                       'status': map.status});
-                if (src.device.links)
-                    src.device.links.push(link_key);
-                else
-                    src.device.links = [link_key];
-                if (dst.device.links)
-                    dst.device.links.push(link_key);
-                else
-                    dst.device.links = [link_key];
-            }
-            else if (!link.maps.includes(map.key))
-                link.maps.push(map.key);
-            if (link.status != 'active' && map.status == 'active') {
-                link.status = 'active';
-                this.links.cb_func('modified', 'link', link);
+            for (var j in srcs) {
+                let src = srcs[j];
+                let link_key;
+                let rev = false;
+                if (src.device.name < dst.device.name)
+                    link_key = src.device.name + '<->' + dst.device.name;
+                else {
+                    link_key = dst.device.name + '<->' + src.device.name;
+                    rev = true;
+                }
+                let link = this.links.find(link_key);
+                if (!link) {
+                    link = this.links.add({'key': link_key,
+                                           'src': rev ? dst.device : src.device,
+                                           'dst': rev ? src.device : dst.device,
+                                           'maps': [map.key],
+                                           'status': map.status});
+                    if (src.device.links)
+                        src.device.links.push(link_key);
+                    else
+                        src.device.links = [link_key];
+                    if (dst.device.links)
+                        dst.device.links.push(link_key);
+                    else
+                        dst.device.links = [link_key];
+                }
+                else if (!link.maps.includes(map.key))
+                    link.maps.push(map.key);
+                if (link.status != 'active' && map.status == 'active') {
+                    link.status = 'active';
+                    this.links.cb_func('modified', 'link', link);
+                }
             }
         }
     }
@@ -378,24 +407,27 @@ function Graph() {
         map = this.maps.find(map.key);
         if (!map)
             return;
-        let link_key;
-        if (map.src.device.name < map.dst.device.name)
-            link_key = map.src.device.name + '<->' + map.dst.device.name;
-        else
-            link_key = map.dst.device.name + '<->' + map.src.device.name;
-        let link = this.links.find(link_key);
-        if (link) {
-            let index = link.maps.indexOf(map.key);
-            if (index > -1)
-                link.maps.splice(index, 1);
-            if (link.maps.length == 0) {
-                index = link.src.links.indexOf(link_key);
+        for (var j in map.srcs) {
+            let src = map.srcs[j];
+            let link_key;
+            if (src.device.name < map.dst.device.name)
+                link_key = src.device.name + '<->' + map.dst.device.name;
+            else
+                link_key = map.dst.device.name + '<->' + src.device.name;
+            let link = this.links.find(link_key);
+            if (link) {
+                let index = link.maps.indexOf(map.key);
                 if (index > -1)
-                    link.src.links.splice(index, 1);
-                index = link.dst.links.indexOf(link_key);
-                if (index > -1)
-                    link.dst.links.splice(index, 1);
-                this.links.remove(link);
+                    link.maps.splice(index, 1);
+                if (link.maps.length == 0) {
+                    index = link.src.links.indexOf(link_key);
+                    if (index > -1)
+                        link.src.links.splice(index, 1);
+                    index = link.dst.links.indexOf(link_key);
+                    if (index > -1)
+                        link.dst.links.splice(index, 1);
+                    this.links.remove(link);
+                }
             }
         }
         this.maps.remove(map);
@@ -549,8 +581,12 @@ function Graph() {
             if (!map.view)
                 return;
             let m = {'sources': [], 'destinations': []};
-            let src = {};
-            let dst = {};
+            for (var i in map.srcs) {
+                m.sources.push({'name': map.srcs[i].key,
+                                'direction': map.srcs[i].direction});
+            }
+            m.destinations.push({'name': map.dst.key,
+                                 'direction': map.dst.direction});
             for (var attr in map) {
                 switch (attr) {
                     // ignore a few properties
@@ -559,12 +595,8 @@ function Graph() {
                     case 'key':
                         break;
                     case 'src':
-                        src.name = map.src.key;
-                        src.direction = map.src.direction;
-                        break;
+                    case 'srcs':
                     case 'dst':
-                        dst.name = map.dst.key;
-                        dst.direction = map.dst.direction;
                         break;
                     case 'expression':
                         // need to replace x and y variables with signal references
@@ -589,24 +621,22 @@ function Graph() {
                         if (attr.startsWith('src_')) {
                             let key = attr.slice(4);
                             if (key == 'min' || key == 'max')
-                                src[key + 'imum'] = map[attr];
+                                m.sources[0][key + 'imum'] = map[attr];
                             else
-                                src[key] = map[attr];
+                                m.sources[0][key] = map[attr];
                         }
                         else if (attr.startsWith('dst_')) {
                             let key = attr.slice(4);
                             if (key == 'min' || key == 'max')
-                                dst[key + 'imum'] = map[attr];
+                                m.destinations[0][key + 'imum'] = map[attr];
                             else
-                                dst[key] = map[attr];
+                                m.destinations[0][key] = map[attr];
                         }
                         else
                             m[attr] = map[attr];
                         break;
                 }
             }
-            m.sources.push(src);
-            m.destinations.push(dst);
             file.mapping.maps.push(m);
             numMaps++;
         });
@@ -693,12 +723,20 @@ function Graph() {
                 map.dst_calibrating = map.destinations[0].calibrating;
             if (map.sources[0].min)
                 map.src_min = map.sources[0].min;
+            else if (map.sources[0].minimum)
+                map.src_min = map.sources[0].minimum;
             if (map.sources[0].max)
                 map.src_max = map.sources[0].max;
+            else if (map.sources[0].maximum)
+                map.src_max = map.sources[0].maximum;
             if (map.destinations[0].min)
                 map.dst_min = map.destinations[0].min;
+            else if (map.destinations[0].minimum)
+                map.dst_min = map.destinations[0].minimum;
             if (map.destinations[0].max)
                 map.dst_max = map.destinations[0].max;
+            else if (map.destinations[0].maximum)
+                map.dst_max = map.destinations[0].maximum;
             delete map.sources;
             delete map.destinations;
             map.src = src;
@@ -749,3 +787,5 @@ function Graph() {
     command.register("add_maps", this.add_maps.bind(this));
     command.register("del_map", this.del_map.bind(this));
 };
+
+var graph = new Graph();

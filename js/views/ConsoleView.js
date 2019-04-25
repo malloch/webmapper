@@ -5,8 +5,8 @@
 'use strict';
 
 class ConsoleView extends View {
-    constructor(frame, tables, canvas, graph, tooltip) {
-        super('console', frame, null, canvas, graph, tooltip);
+    constructor(frame, tables, canvas, graph, tooltip, pie) {
+        super('console', frame, tables, canvas, graph, tooltip, pie);
 
         // hide left table
         tables.left.adjust(0, 0, 0, frame.height, 0, 500);
@@ -201,9 +201,18 @@ class ConsoleView extends View {
                             echo('Maps ('+mapCount+'):');
                             self.graph.maps.each(function (map) {
                                 let s = ' '+mapIdx+') ';
-                                color = Raphael.hsl(map.src.device.hue, 1, 0.5);
-                                s += '[[;'+color+';]'+map.src.device.name+'/'+map.src.name+']';
-                                s += '[[;white;]->]';
+                                let len = map.srcs.length;
+                                if (len > 1)
+                                    s += '[[;white;]\[]';
+                                for (var i in map.srcs) {
+                                    color = Raphael.hsl(map.srcs[i].device.hue, 1, 0.5);
+                                    s += '[[;'+color+';]'+map.srcs[i].device.name+'/'+map.srcs[i].name+']';
+                                    if (i < len-1)
+                                        s += '[[;white;],]';
+                                }
+                                if (len > 1)
+                                    s += '[[;white;]\\]';
+                                s += ' [[;white;]->] ';
                                 color = Raphael.hsl(map.dst.device.hue, 1, 0.5);
                                 s += '[[;'+color+';]'+map.dst.device.name+'/'+map.dst.name+']';
                                 echo(s);
@@ -215,6 +224,7 @@ class ConsoleView extends View {
                                         let key = keys[i];
                                         switch (key) {
                                             case 'src':
+                                            case 'srcs':
                                             case 'dst':
                                             case 'key':
                                             case 'view':
@@ -263,7 +273,8 @@ class ConsoleView extends View {
                             let index = 0;
                             self.graph.maps.each(function(map) {
                                 if (++index == command[1]) {
-                                    mapper.unmap(map.src.key, map.dst.key);
+                                    mapper.unmap(map.srcs.map(s => s.key),
+                                                 map.dst.key);
                                 }
                             });
                         }
@@ -389,27 +400,9 @@ class ConsoleView extends View {
         this.mapPane.cy = this.frame.height * 0.5;
     }
 
-    draw(duration) {
-    }
+    draw(duration) {}
 
-    update() {
-        let elements;
-        switch (arguments.length) {
-            case 0:
-                elements = ['maps'];
-                break;
-            case 1:
-                elements = [arguments[0]];
-                break;
-            default:
-                elements = arguments;
-                break;
-        }
-        if (elements.indexOf('maps') >= 0) {
-            this.updateMaps();
-            this.draw(500);
-        }
-    }
+    update() {}
 
     cleanup() {
         super.cleanup();

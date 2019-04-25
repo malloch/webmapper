@@ -14,8 +14,8 @@ class ViewManager
         this.canvas_zoom = 1;
         this.canvas_pan = [0, 0];
 
-        this.srcregexp = null;
-        this.dstregexp = null;
+        this.srcRE = null;
+        this.dstRE = null;
 
         this.views = [];
 
@@ -26,13 +26,16 @@ class ViewManager
         this._selection_handlers();
         this._keyboard_handlers();
         this._add_graph_callbacks();
+        this.pie = new Pie(this.canvas, ConvergentMappingSlices);
 
         let self = this;
         this.graph.devices.each(function(dev) { self._update_devices(dev, 'added'); });
         this.graph.maps.each(function(map) { self._update_maps(map, 'added'); });
 
         this.currentView = null;
-        this.switch_view('chord');
+        setTimeout(function() {
+            self.switch_view('chord');
+        }, 100);
     }
 
     zoom(x, y, delta) {
@@ -56,12 +59,12 @@ class ViewManager
     filterSignals(searchbar, text) {
         // need to cache regexp here so filtering works across view transitions
         if (searchbar == 'srcSearch') {
-            this.srcregexp = text ? new RegExp(text, 'i') : null;
-            this.views[this.currentView].filterSignals('src', text.length ? text : null);
+            this.graph.srcRE = text ? new RegExp(text, 'i') : new RegExp('.*');
+            this.views[this.currentView].filterSignals('src');
         }
         else {
-            this.dstregexp = text ? new RegExp(text, 'i') : null;
-            this.views[this.currentView].filterSignals('dst', text.length ? text : null);
+            this.graph.dstRE = text ? new RegExp(text, 'i') : new RegExp('.*');
+            this.views[this.currentView].filterSignals('dst');
         }
     }
 
@@ -88,40 +91,40 @@ class ViewManager
             switch (viewType) {
                 case 'balloon':
                     view = new BalloonView(this.frame, this.tables, this.canvas,
-                                           this.graph, this.tooltip);
+                                           this.graph, this.tooltip, this.pie);
                     break;
                 case 'canvas':
                     view = new CanvasView(this.frame, this.tables, this.canvas,
-                                          this.graph, this.tooltip);
+                                          this.graph, this.tooltip, this.pie);
                     break;
                 case 'graph':
                     view = new GraphView(this.frame, this.tables, this.canvas,
-                                         this.graph, this.tooltip);
+                                         this.graph, this.tooltip, this.pie);
                     break;
                 case 'grid':
                     view = new GridView(this.frame, this.tables, this.canvas,
-                                        this.graph, this.tooltip);
+                                        this.graph, this.tooltip, this.pie);
                     break;
                 case 'parallel':
                     view = new ParallelView(this.frame, this.tables, this.canvas,
-                                            this.graph, this.tooltip);
+                                            this.graph, this.tooltip, this.pie);
                     break;
                 case 'hive':
                     view = new HiveView(this.frame, this.tables, this.canvas,
-                                        this.graph, this.tooltip);
+                                        this.graph, this.tooltip, this.pie);
                     break;
                 case 'chord':
                     view = new ChordView(this.frame, this.tables, this.canvas,
-                                         this.graph, this.tooltip);
+                                         this.graph, this.tooltip, this.pie);
                     break;
                 case 'console':
                     view = new ConsoleView(this.frame, this.tables, this.canvas,
-                                           this.graph, this.tooltip);
+                                           this.graph, this.tooltip, this.pie);
                     break;
                 case 'list':
                 default:
                     view = new ListView(this.frame, this.tables, this.canvas,
-                                        this.graph, this.tooltip);
+                                        this.graph, this.tooltip, this.pie);
                     break;
             }
             this.views[viewType] = view;
@@ -304,7 +307,8 @@ class ViewManager
                     self.graph.maps.each(function(map) {
                         if (map.selected)
                         {
-                            mapper.unmap(map.src.key, map.dst.key);
+                            let srcs = map.srcs.map(s => s.key);
+                            mapper.unmap(srcs, map.dst.key);
                             self.tooltip.hide();
                         }
                     });
@@ -314,12 +318,6 @@ class ViewManager
                     if (e.metaKey == true) { // Select all 'cmd+a'
                         e.preventDefault();
                         select_all_maps();
-                    }
-                    break;
-                case 65:
-                    if (e.metaKey == true) {
-                        e.preventDefault();
-                        console.log('should add tab');
                     }
                     break;
                 case 27:

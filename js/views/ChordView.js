@@ -5,8 +5,8 @@
 'use strict';
 
 class ChordView extends View {
-    constructor(frame, tables, canvas, graph, tooltip) {
-        super('chord', frame, tables, canvas, graph, tooltip);
+    constructor(frame, tables, canvas, graph, tooltip, pie) {
+        super('chord', frame, tables, canvas, graph, tooltip, pie);
 
         this.radius = 200;
 
@@ -25,6 +25,9 @@ class ChordView extends View {
     }
 
     setup() {
+        // disable signal filter
+        $('#signalFilterDiv').addClass('disabled');
+
         // hide tables
         this.tables.left.adjust(this.frame.width * -0.4, 0, 0,
                                 this.frame.height, 0, 500, null, 0, 0);
@@ -647,6 +650,8 @@ class ChordView extends View {
             dev.view.unclick();
             dev.view.unhover();
         });
+
+        $('#signalFilterDiv').removeClass('disabled');
 
         // clean up any objects created only for this view
     }

@@ -11,8 +11,8 @@
  * this view uses an array of signal positions. */
 
 class GraphView extends View {
-    constructor(frame, tables, canvas, graph, tooltip) {
-        super('graph', frame, tables, canvas, graph, tooltip, GraphMapPainter);
+    constructor(frame, tables, canvas, graph, tooltip, pie) {
+        super('graph', frame, tables, canvas, graph, tooltip, pie, GraphMapPainter);
 
         this.xAxisProp = null;//'min';
         this.yAxisProp = null;//'max';
@@ -51,6 +51,7 @@ class GraphView extends View {
 
     setup() {
         this.setMapPainter(GraphMapPainter);
+        this.setAllSigHandlers();
 
         // hide tables
         this.tables.left.adjust(this.frame.width * -0.4, 0, 0,
@@ -290,7 +291,7 @@ class GraphView extends View {
                     if (dev.hidden || sig.hidden) {
                         if (sig.view) {
                             sig.view.hide();
-                            sig.view.hidden = true;
+                            sig.hidden = true;
                         }
                         return;
                     }
@@ -324,12 +325,12 @@ class GraphView extends View {
                     if (xProp && (xVal === null) || yProp && (yVal === null)) {
                         if (sig.view) {
                             sig.view.hide();
-                            sig.view.hidden = true;
+                            sig.hidden = true;
                         }
                         return;
                     }
                     sig.view.show();
-                    sig.view.hidden = false;
+                    sig.hidden = false;
                     let positionChanged = false;
                     if (xVal != null) {
                         let min, max;
@@ -502,7 +503,7 @@ class GraphView extends View {
         this.graph.devices.each(function(devA) {
             // attract positions towards targets
             devA.signals.each(function(sig) {
-                if (!sig.view || sig.view.hidden || !sig.target)
+                if (!sig.view || sig.hidden || !sig.target)
                     return;
                 for (var i in sig.position) {
                     let dx = sig.target[i].x - sig.position[i].x;
@@ -518,14 +519,14 @@ class GraphView extends View {
             // repel signal positions
             let nSig = (devA['num_sigs_out'] + devA['num_sigs_in']) * 0.25;
             devA.signals.each(function(sigA) {
-                if (!sigA.view || sigA.view.hidden || !sigA.target)
+                if (!sigA.view || sigA.hidden || !sigA.target)
                     return;
                 let pA = sigA.position;
                 let fA = sigA.force;
                 let found = false;
                 self.graph.devices.each(function(devB) {
                     devB.signals.each(function(sigB) {
-                        if (!sigB.view || sigB.view.hidden || !sigB.target)
+                        if (!sigB.view || sigB.hidden || !sigB.target)
                             return;
                         if (found === true) {
                             let pB = sigB.position;
@@ -605,7 +606,7 @@ class GraphView extends View {
     }
 
     drawSignal(sig, duration) {
-        if (!sig.view || sig.view.hidden)
+        if (!sig.view || sig.hidden)
             return;
         sig.view.stop();
         let pos = sig.position;
@@ -730,9 +731,9 @@ class GraphView extends View {
                     delete sig.target;
                 if (sig.force)
                     delete sig.force;
-                if (sig.view && sig.view.hidden) {
+                if (sig.view && sig.hidden) {
                     sig.view.show();
-                    sig.view.hidden = false;
+                    sig.hidden = false;
                 }
             });
         });
@@ -757,22 +758,15 @@ class GraphMapPainter extends MapPainter
 
     updatePaths()
     {
-        let src = this.map.src;
+        let srcs = this.map.srcs.filter(src => !src.hidden);
         let dst = this.map.dst;
 
-        if (   src.device.hidden || !src.view || src.view.hidden
-            || dst.device.hidden || !dst.view || dst.view.hidden) {
-            this.hide();
-            return;
-        }
-        this.show();
-
         // draw a curved line from src to dst
-        let srcPos = src.position;
-        let dstPos = dst.position;
+        let srcsPos = srcs.map(src => src.position instanceof Array ? src.position : [src.position])
+        let dstPos = dst.position instanceof Array ? dst.position : [dst.position];
 
         // check if number of src or dst positions has changed
-        let len = srcPos.length * dstPos.length;
+        let len = srcsPos.reduce((a, srcPos) => a + srcPos.length, 0) * dstPos.length;
         if (this.pathspecs.length > len) {
             for (var i = len; i < this.paths.length; i++) {
                 let path = this.paths[i];
@@ -786,20 +780,20 @@ class GraphMapPainter extends MapPainter
             this.pathspecs = this.pathspecs.slice(0, len);
         }
 
+        let o = {x: this.frame.width * 0.5, y: this.frame.height * 0.5};
         let idx = 0;
-        for (var i in srcPos) {
-            let s = srcPos[i];
-            for (var j in dstPos) {
-                let d = dstPos[j];
-                let m = {x: (s.x + d.x) * 0.5, y: (s.y + d.y) * 0.5};
-                let o = {x: this.frame.width * 0.5, y: this.frame.height * 0.5};
+        for (let srcPos of srcsPos) {
+            for (let s of srcPos) {
+                for (let d of dstPos) {
+                    let m = {x: (s.x + d.x) * 0.5, y: (s.y + d.y) * 0.5};
 
-                m.x = m.x + (m.x - o.x) * this.midPointInflation;
-                m.y = m.y + (m.y - o.y) * this.midPointInflation;
+                    m.x = m.x + (m.x - o.x) * this.midPointInflation;
+                    m.y = m.y + (m.y - o.y) * this.midPointInflation;
 
-                this.pathspecs[idx] = [['M', s.x, s.y],
-                                       ['S', m.x, m.y, d.x, d.y]];
-                idx += 1;
+                    this.pathspecs[idx] = [['M', s.x, s.y],
+                                           ['S', m.x, m.y, d.x, d.y]];
+                    idx += 1;
+                }
             }
         }
     }

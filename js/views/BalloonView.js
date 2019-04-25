@@ -5,8 +5,8 @@
 'use strict';
 
 class BalloonView extends View {
-    constructor(frame, tables, canvas, graph, tooltip) {
-        super(frame, null, canvas, graph, tooltip);
+    constructor(frame, tables, canvas, graph, tooltip, pie) {
+        super(frame, tables, canvas, graph, tooltip, pie);
 
         // hide tables
         tables.left.adjust(0, 0, 0, frame.height, 0, 500);

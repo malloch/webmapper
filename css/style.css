@@ -65,7 +65,7 @@ thead, #networkMenu {
 }
 
 .calibratesel, .setlinearsel {
-    background-color: #9CC2CF;
+    background-color: red;
 }
 
 .tableTitle {
@@ -178,6 +178,7 @@ path {
     padding-top: 5px;
     padding-bottom: 5px;
     position: absolute;
+    width: 100%;
 }
 
 .topMenu {
@@ -398,6 +399,10 @@ form {
     background-color: black;
 }
 
+.tdsel {
+    font-weight: bold;
+}
+
 #modeLinear, #protoUDP {
     padding-left: 5px;
     border-top-left-radius: 6px;
@@ -420,7 +425,7 @@ form {
 
 div.range {
     margin-left: 10px;
-    padding: 3px 3px;
+    padding: 4px 3px;
     width: 100%;
 }
 input.range {

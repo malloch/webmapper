@@ -1,9 +1,10 @@
 class SignalFilter{
-    constructor(container, graph, viewmanager) {
+    constructor(container, graph, viewManager) {
         this.container = container;
         this.graph = graph;
+        this.viewManager = viewManager;
         $(this.container).append(
-            "<div id='signalFilterDiv' class='topMenu' style='width:calc(25% - 75px);'>"+
+            "<div id='signalFilterDiv' class='topMenu' style='width:275px'>"+
                 "<div class='topMenuTitle'><strong>FILTER</strong></div>"+
                 "<div class='topMenuContainer'>"+
                     "<div>Sources: "+
@@ -16,10 +17,32 @@ class SignalFilter{
             "</div>");
         
         let self = this;
-        $('#srcSearch, #dstSearch').on('input', function(e) {
-            e.stopPropagation();
-            let id = e.currentTarget.id;
-            viewmanager.filterSignals(id, $('#'+id).val());
+        $('#srcSearch, #dstSearch').on({
+            keydown: function(e) {
+                e.stopPropagation();
+                if (e.metaKey == true) {
+                    e.preventDefault();
+                    if (e.which == 70) {
+                        // remove focus
+                        $(this).blur();
+                        self.activate();
+                    }
+                }
+                // check enter or escape
+                else if (e.which == 13 || e.which == 27) {
+                    // remove focus
+                    $(this).blur();
+                }
+            },
+            input: function(e) {
+                let id = e.currentTarget.id;
+                viewManager.filterSignals(id, $('#'+id).val());
+            },
         });
+    }
+
+    activate() {
+        if (this.viewManager.currentView != 'chord')
+            $('#srcSearch').focus();
     }
 }

@@ -1,10 +1,11 @@
 "use strict";
-var graph = new Graph();
 
+var graph = new Graph();
 var viewManager;
 var mapProperties;
-var devFilter;
+var sigFilter;
 var saverLoader;
+var netSelector;
 var viewSelector;
 var tooltip;
 
@@ -77,9 +78,11 @@ function init() {
                                   graph, viewManager);
     viewSelector = new ViewSelector(document.getElementById("TopMenuWrapper"),
                                     viewManager);
-    devFilter = new SignalFilter(document.getElementById("TopMenuWrapper"),
+    sigFilter = new SignalFilter(document.getElementById("TopMenuWrapper"),
                                  graph, viewManager);
     mapProperties = new MapProperties(document.getElementById("TopMenuWrapper"),
+                                      graph, viewManager);
+    netSelector = new NetworkSelector(document.getElementById("TopMenuWrapper"),
                                       graph, viewManager);
 
     // init controller
@@ -128,13 +131,13 @@ function init() {
  * initialize the event listeners for events triggered by the monitor
  */
 function initMonitorCommands() {
-    command.register("available_interfaces", function(cmd, args) {
+    command.register("available_networks", function(cmd, args) {
         graph.networkInterfaces.available = args;
-        mapProperties.updateNetworkInterfaces(args);
+        netSelector.update();
     });
-    command.register("active_interface", function(cmd, args) {
+    command.register("active_network", function(cmd, args) {
         graph.networkInterfaces.selected = args
-        mapProperties.updateNetworkInterfaces(args);
+        netSelector.update();
     });
 }
 
@@ -171,7 +174,7 @@ function initViewCommands()
         }
 
         let new_view = null;
-                 let mp;
+        let mp;
         switch (e.which) {
             case 49:
                 /* 1 */
@@ -228,6 +231,11 @@ function initViewCommands()
                 mp = viewManager.view.mapPane;
                 viewManager.zoom(mp.cx, mp.cy, 10);
                 break;
+            case 70:
+                // "find": focus on signal filter
+                e.preventDefault();
+                sigFilter.activate();
+                break;
             default:
 //                console.log('key:', e.which);
         }
@@ -282,6 +290,6 @@ function select_obj(obj) {
     if (obj.selected)
         return false;
     obj.selected = true;
-    obj.view.draw(0);
+    if (obj.view instanceof MapPainter) obj.view.draw(0);
     return true;
 }

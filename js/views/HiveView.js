@@ -5,8 +5,8 @@
 'use strict';
 
 class HiveView extends View {
-    constructor(frame, tables, canvas, graph, tooltip) {
-        super('hive', frame, tables, canvas, graph, tooltip, HiveMapPainter);
+    constructor(frame, tables, canvas, graph, tooltip, pie) {
+        super('hive', frame, tables, canvas, graph, tooltip, pie, HiveMapPainter);
 
         this.pan = this.canvasPan;
         this.zoom = this.canvasZoom;
@@ -34,8 +34,9 @@ class HiveView extends View {
             dev.signals.each(function(sig) {
                 if (sig.index && !sig.position)
                     sig.position = self.origin;
-            });
+            })
         });
+        this.setAllSigHandlers();
 
         this.resize();
     }
@@ -173,32 +174,26 @@ class HiveView extends View {
     }
 }
 
-class HiveMapPainter extends MapPainter
+class HiveMapPainter extends ListMapPainter
 {
-    constructor(map, canvas, frame) { super(map, canvas, frame); }
-
-    updateAttributes() {
-        this._defaultAttributes();
+    constructor(map, canvas, frame, graph) {
+        super(map, canvas, frame, graph); 
         this.shortenPath = 12;
     }
 
-    updatePaths() {
-        let src = this.map.src.position;
-        let dst = this.map.dst.position;
-
-        let mid = {x: (src.x + dst.x) * 0.5, y: (src.y + dst.y) * 0.5};
-        let origin = {x: this.frame.left, y: this.frame.top + this.frame.height};
-
-        if (this.map.src.device == this.map.dst.device) {
-            // signals belong to same device
-            mid.x += (src.y - dst.y) * 0.5;
-            mid.y -= (src.x - dst.x) * 0.5;
+    getNodePosition()
+    {
+        // adjust node x so that it won't overlap with a device
+        let node = super.getNodePosition();
+        let sigs = this.map.srcs.concat([this.map.dst]);
+        for (let s of sigs)
+        {
+            if (distance(node.x, node.y, s.position.x, s.position.y) < 200)
+            {
+                node.x += 50;
+                node.y += 50;
+            }
         }
-        else {
-            mid.x = mid.x + (mid.x - origin.x) * this.midPointInflation;
-            mid.y = mid.y + (mid.y - origin.y) * this.midPointInflation;
-        }
-        this.pathspecs[0] = [['M', src.x, src.y],
-                             ['S', mid.x, mid.y, dst.x, dst.y]];
+        return node;
     }
 }

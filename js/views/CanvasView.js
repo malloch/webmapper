@@ -5,8 +5,8 @@
 'use strict';
 
 class CanvasView extends View {
-    constructor(frame, tables, canvas, graph, tooltip) {
-        super('canvas', frame, tables, canvas, graph, tooltip,
+    constructor(frame, tables, canvas, graph, tooltip, pie) {
+        super('canvas', frame, tables, canvas, graph, tooltip, pie,
               CanvasMapPainter);
 
         this.leftExpandWidth = 200;
@@ -56,6 +56,16 @@ class CanvasView extends View {
             });
             remove_object_svg(dev);
         });
+
+        this.tables.left.resizeHandler = function() {
+            if (self.tables.left.expandWidth != self.leftExpandWidth) {
+                self.leftExpandWidth = self.tables.left.expandWidth;
+                self.resize(null, 500);
+            }
+            self.drawMaps(0);
+        };
+        this.tables.right.resizeHandler = null;
+
         this.resize(null, 500);
     }
 
@@ -83,25 +93,9 @@ class CanvasView extends View {
                    return;
                 }
                 // snap to sig object
-                let src = self.draggingFrom.position;
-                let dst = sig.position;
-                let src_offset = src.width * 0.5;
-                let dst_offset = dst.width * 0.5;
-                let path = null;
-                if (self.dragging == 'left') {
-                   path = [['M', src.left - src_offset, src.top],
-                           ['C', src.left - src_offset * 3, src.top,
-                            dst.left + dst_offset * 3, dst.top,
-                            dst.left + dst_offset, dst.top]];
-                }
-                else {
-                   path = [['M', src.left + src_offset, src.top],
-                           ['C', src.left + src_offset * 3, src.top,
-                            dst.left - dst_offset * 3, dst.top,
-                            dst.left - dst_offset, dst.top]];
-                }
                 self.snappingTo = sig;
-                self.newMap.attr({'path': path});
+                self.newMap.dst = sig;
+                self.newMap.view.draw(0);
                 return;
             },
             function() {
@@ -130,7 +124,7 @@ class CanvasView extends View {
             else if (self.draggingFrom && self.snappingTo) {
                 mapper.map(self.draggingFrom.key, self.snappingTo.key);
                 if (self.newMap) {
-                    self.newMap.remove();
+                    self.newMap.view.remove();
                     self.newMap = null;
                 }
             }
@@ -150,7 +144,7 @@ class CanvasView extends View {
                     self.dragging = null;
                     self.trashing = false;
                     if (self.newMap) {
-                        self.newMap.remove();
+                        self.newMap.view.remove();
                         self.newMap = null;
                     }
                     return;
@@ -158,6 +152,8 @@ class CanvasView extends View {
                 if (self.dragging == 'obj') {
                     p.left = x1 + p.drag_offset.x;
                     p.top = y1 + p.drag_offset.y;
+                    p.x = p.left + p.width * 0.5;
+                    p.y = p.top + p.height * 0.5;
                     c.left = p.left;
                     c.top = p.top;
                     self.drawSignal(sig);
@@ -175,26 +171,11 @@ class CanvasView extends View {
                     return;
                 }
                 else if (!self.snappingTo) {
-                    let offset = p.width * 0.5 + 10;
-                    let arrow_start = 'none';
-                    let arrow_end = 'none';
-                    if (self.dragging == 'left') {
-                        offset *= -1;
-                        arrow_start = 'block-wide-long';
-                    }
-                    else
-                        arrow_end = 'block-wide-long';
                     x1 -= self.frame.left;
                     y1 -= self.frame.top;
-                    let path = [['M', p.left + offset, p.top],
-                                ['C', p.left + offset * 3, p.top,
-                                 x1 - offset * 3, y1, x1, y1]];
-                    self.newMap.attr({'path': path,
-                                      'stroke': 'white',
-                                      'stroke-width': 4,
-                                      'stroke-opacity': 1,
-                                      'arrow-start': arrow_start,
-                                      'arrow-end': arrow_end});
+                    self.newMap.dst.position.x = x1;
+                    self.newMap.dst.position.y = y1;
+                    self.newMap.view.draw(0);
                 }
             },
             function(x, y, event) {
@@ -213,8 +194,18 @@ class CanvasView extends View {
                     // move svg canvas to front
                     $('#svgDiv').css({'z-index': 2});
                 }
-                if (self.dragging !== 'obj')
-                    self.newMap = self.canvas.path();
+                if (self.dragging !== 'obj') {
+                    self.newMap = 
+                        {
+                            'src': sig,
+                            'srcs': [sig],
+                            'dst': {'position': {'width': 2, 'x': x, 'y': y}, 'device': {'hidden' : false}, 'view': {}},
+                            'selected': true,
+                            'hidden': false
+                        };
+                    self.newMap.view = new self.mapPainter(self.newMap, self.canvas,
+                                                           self.frame, self.graph);
+                }
             },
             function(x, y, event) {
                 self.draggingFrom = null;
@@ -222,7 +213,7 @@ class CanvasView extends View {
                     delete sig.position.drag_offset;
                 self.dragging = null;
                 if (self.newMap) {
-                    self.newMap.remove();
+                    self.newMap.view.remove();
                     self.newMap = null;
                 }
                 // move svg canvas to back
@@ -388,6 +379,8 @@ class CanvasView extends View {
                     }
                     p.left = (e.pageX - self.frame.left) * self.canvas.zoom + self.canvas.pan.x;
                     p.top = (e.pageY - self.frame.top) * self.canvas.zoom + self.canvas.pan.y;
+                    p.x = p.left + p.width * 0.5;
+                    p.y = p.top + p.height * 0.5;
                     c.left = p.left;
                     c.top = p.top;
                     self.drawSignal(sig, 0);
@@ -438,57 +431,153 @@ class CanvasView extends View {
     }
 }
 
-class CanvasMapPainter extends ListMapPainter
+class CanvasMapPainter extends MapPainter
 {
-    constructor(map, canvas) {super(map, canvas);}
+    constructor(map, canvas, frame, graph) {super(map, canvas, frame, graph);}
 
     updatePaths() {
-        // draw a curved line from src to dst
-        let src = this.map.src.position;
-        let dst = this.map.dst.position;
+        let dst = this.map.dst;
+        if (this.map.srcs.length === 1) {
+            // draw a curved line from src to dst
+            let src = this.map.srcs[0];
+            if (!src.canvasObject && !dst.canvasObject)
+                this.pathspecs[0] = this.vertical(src, dst);
+            else
+                this.pathspecs[0] = this.canvas_path(src, dst);
+        }
+        else {
+            let sigs = this.map.srcs.filter(s => !s.hidden).map(s => s.position);
+            sigs = sigs.concat([dst]);
+            let xavg = sigs.map(s => s.x).reduce((accum, s) => accum + s) / sigs.length;
+            let yavg = sigs.map(s => s.y).reduce((accum, s) => accum + s) / sigs.length;
+            let node = this.getNodePosition(50);
+            if (sigs.every(s => !s.canvasObject))
+                node.x += 50;
+            node.width = 0;
+            node.left = node.x;
+            node.top = node.y;
+            let i = 0;
+            for (; i < this.map.srcs.length; i++) {
+                let src = this.map.srcs[i];
+                if (src.hidden) continue;
+                this.pathspecs[i] = this.canvas_path(src, {position: node,
+                                                           canvasObject: true});
+            }
+            this.pathspecs[i] = this.canvas_path({position: node,
+                                                  canvasObject: true}, dst);
+            this.pathspecs[i+1] = this.circle_spec(node.x, node.y);
+        }
+    }
+
+    getNodePosition(offset)
+    {
+        let self = this;
+        function canvasPos(o) {
+            let x = o.position.x;
+            let y = o.position.y;
+            if (!o.canvasObject) {
+                x = x * self.canvas.zoom + self.canvas.pan.x;
+                y = y * self.canvas.zoom + self.canvas.pan.y;
+            }
+            return {x: x, y: y};
+        }
+        let dst = this.map.dst;
+        let sigs = this.map.srcs.filter(s => !s.hidden);
+        if (sigs.length === 0) return null;
+        sigs = sigs.concat([dst]);
+
+        let x = sigs.map(s => canvasPos(s).x).reduce((accum, s) => accum + s) / sigs.length;
+        let y = sigs.map(s => canvasPos(s).y).reduce((accum, s) => accum + s) / sigs.length;
+
+        if (offset) {
+            if (x === dst.x)
+                x += offset * dst.vx;
+            if (y === dst.y)
+                y += offset * dst.vy;
+        }
+
+        return {x: x, y: y};
+    }
+
+    vertical(src, dst, minoffset = 30, maxoffset = 200)
+    {
+        src = src.position;
+        dst = dst.position;
 
         let src_x, src_cx, src_y, dst_x, dst_cx, dst_y;
 
-        if (!this.map.src.canvasObject && !this.map.dst.canvasObject) {
-            // signals are inline vertically
-            let minoffset = 30;
-            let maxoffset = 200;
-            let offset = Math.abs(src.y - dst.y) * 0.5;
-            if (offset > maxoffset) offset = maxoffset;
-            if (offset < minoffset) offset = minoffset;
+        let offset = Math.abs(src.y - dst.y) * 0.5;
+        if (offset > maxoffset) offset = maxoffset;
+        if (offset < minoffset) offset = minoffset;
 
-            src_x = dst_x = src.x * this.canvas.zoom + this.canvas.pan.x;
-            src_cx = dst_cx = (src.x + offset) * this.canvas.zoom + this.canvas.pan.x;
-            src_y = src.y * this.canvas.zoom + this.canvas.pan.y;
-            dst_y = dst.y * this.canvas.zoom + this.canvas.pan.y;
+        src_x = dst_x = src.x * this.canvas.zoom + this.canvas.pan.x;
+        src_cx = dst_cx = (src.x + offset) * this.canvas.zoom + this.canvas.pan.x;
+        src_y = src.y * this.canvas.zoom + this.canvas.pan.y;
+        dst_y = dst.y * this.canvas.zoom + this.canvas.pan.y;
+
+        return [['M', src_x, src_y], ['C', src_cx, src_y, dst_cx, dst_y, dst_x, dst_y]];
+    }
+
+    canvas_path(src, dst)
+    {
+        let srcPos = src.position;
+        let dstPos = dst.position;
+        let src_x, src_cx, src_y, dst_x, dst_cx, dst_y;
+
+        if (src.canvasObject) {
+            let offset = srcPos.width * 0.5;
+            src_x = srcPos.left + offset;
+            src_cx = srcPos.left + offset * 2;
+            src_y = srcPos.top;
         }
         else {
-            if (this.map.src.canvasObject) {
-                let offset = src.width * 0.5;
-                src_x = src.left + offset;
-                src_cx = src.left + offset + 200;
-                src_y = src.top;
-            }
-            else {
-                src_x = src.x * this.canvas.zoom + this.canvas.pan.x;
-                src_cx = src_x + src.width * this.canvas.zoom * 0.5;
-                src_y = src.y * this.canvas.zoom + this.canvas.pan.y;
-            }
-
-            if (this.map.dst.canvasObject) {
-                let offset = dst.width * -0.5;
-                dst_x = dst.left + offset;
-                dst_cx = dst.left + offset - 200;
-                dst_y = dst.top;
-            }
-            else {
-                dst_x = dst.x * this.canvas.zoom + this.canvas.pan.x;
-                dst_cx = dst_x + dst.width * this.canvas.zoom * 0.5;
-                dst_y = dst.y * this.canvas.zoom + this.canvas.pan.y;
-            }
+            src_x = srcPos.x * this.canvas.zoom + this.canvas.pan.x;
+            src_cx = src_x + srcPos.width * this.canvas.zoom * 0.5;
+            src_y = srcPos.y * this.canvas.zoom + this.canvas.pan.y;
         }
 
-        this.pathspecs[0] = [['M', src_x, src_y],
-                             ['C', src_cx, src_y, dst_cx, dst_y, dst_x, dst_y]];
+        if (dst.canvasObject) {
+            let offset = dstPos.width * -0.5;
+            dst_x = dstPos.left + offset;
+            dst_cx = dstPos.left + offset * 2;
+            dst_y = dstPos.top;
+        }
+        else {
+            dst_x = dstPos.x * this.canvas.zoom + this.canvas.pan.x;
+            dst_cx = dst_x + dstPos.width * this.canvas.zoom * 0.5;
+            dst_y = dstPos.y * this.canvas.zoom + this.canvas.pan.y;
+        }
+        return [['M', src_x, src_y], ['C', src_cx, src_y, dst_cx, dst_y, dst_x, dst_y]];
+    }
+
+    updateAttributes()
+    {
+        let num_srcs = this.map.srcs.length;
+        if (num_srcs > 1)
+        {
+            let hidden = true;
+            this._defaultAttributes(num_srcs + 2);
+            let i = 0;
+            for (; i < num_srcs; ++i)
+            {
+                hidden = hidden && this.map.srcs[i].hidden;
+                if (this.map.srcs[i].hidden) this.attributes[i]['stroke'] = 'none';
+                this.attributes[i]['arrow-end'] = 'none';
+            }
+
+            if (hidden)
+            {
+                this.attributes[i].stroke = 'none';
+                this.attributes[i+1].stroke = 'none';
+            }
+            else
+            {
+                this.attributes[i+1].fill = this.map.selected ?
+                MapPainter.selectedColor :
+                MapPainter.defaultColor;
+                this.attributes[i+1]['arrow-end'] = 'none'
+            }
+        }
+        else this._defaultAttributes();
     }
 }

@@ -5,9 +5,9 @@
 'use strict';
 
 class GridView extends View {
-    constructor(frame, tables, canvas, graph, tooltip) {
+    constructor(frame, tables, canvas, graph, tooltip, pie) {
         super('grid', frame, {'left': tables.left, 'right': tables.right},
-              canvas, graph, tooltip, GridMapPainter);
+              canvas, graph, tooltip, pie, GridMapPainter);
 
         this.escaped = false;
         this.leftExpandWidth = 200;
@@ -42,14 +42,14 @@ class GridView extends View {
             remove_object_svg(dev);
         });
 
-        this.tables.left.collapseHandler = function() {
+        this.tables.left.resizeHandler = function() {
             if (self.tables.left.expandWidth != self.leftExpandWidth) {
                 self.leftExpandWidth = self.tables.left.expandWidth;
                 self.resize(null, 500);
             }
             self.drawMaps(0);
         };
-        this.tables.right.collapseHandler = function() {
+        this.tables.right.resizeHandler = function() {
             if (self.tables.right.expandWidth != self.rightExpandWidth) {
                 self.rightExpandWidth = self.tables.right.expandWidth;
                 self.resize(null, 500);
@@ -163,52 +163,78 @@ class GridView extends View {
 
 class GridMapPainter extends ListMapPainter
 {
-    constructor(map, canvas) {super(map, canvas);}
+    constructor(map, canvas, frame, graph) {super(map, canvas, frame, graph);}
 
-    betweenTables(src, dst)
+    convergent()
     {
+        this.pathspecs = []; // so that there won't be any spare triangles left lying about
+        let dst = this.map.dst.position;
+        for (let i = 0; i < this.map.srcs.length; ++i)
+        {
+            let src = this.map.srcs[i].position;
+            this.oneToOne(src, dst, i);
+        }
+    }
+
+    betweenTables(src, dst, i)
+    {
+        let len = this.map.srcs.length;
         let srctodst = src.vx == 1;
         let mid = srctodst ? {x: dst.x, y: src.y} : {x: src.x, y: dst.y};
         let end = srctodst ? {x: dst.x, y: dst.y < src.y ? dst.y : src.y}
                            : {x: dst.x < src.x ? dst.x : src.x, y: dst.y};
 
-        this.pathspecs[0] = [['M', src.x, src.y],
+        this.pathspecs[i] = [['M', src.x, src.y],
                             ['L', mid.x, mid.y],
                             ['L', end.x, end.y]];
 
-        if (typeof dst.left === 'undefined') // dst is not a table row
+        if (typeof dst.left === 'undefined') // dst is not a table row (i.e. user is making a map)
         {
-            this.pathspecs[1] = null;
             return;
         }
 
-        let stroke = this.attributes[1]['stroke-width'];
-        if (srctodst) this.pathspecs[1] = 
+        let stroke = this.attributes[i+len]['stroke-width'];
+        if (srctodst) this.pathspecs[i+len] = 
             [['M', dst.x, src.top + stroke + 1],
              ['L', dst.left + stroke, src.top + src.height - stroke + 2],
              ['l', dst.width - stroke - 2, 0],
              ['Z']]
 
-        else this.pathspecs[1] =
+        else this.pathspecs[i+len] =
             [['M', src.left + stroke, dst.y],
              ['L', src.left + src.width - stroke + 2, dst.top + stroke],
              ['l', 0, dst.height - stroke - 2],
              ['Z']];
     }
 
+    // disable drawing convergent maps in grid view for now
+    updatePaths()
+    {
+        let i = 0, len = this.map.srcs.length;
+        let dst = this.map.dst.position;
+        for (; i < len; i++) {
+            this.oneToOne(this.map.srcs[i].position, dst, i);
+        }
+    }
+
     updateAttributes()
     {
-        this._defaultAttributes(2);
+        let len = this.map.srcs.length;
+        this._defaultAttributes(2*len);
 
-        this.attributes[1]['stroke-dasharray'] = MapPainter.defaultDashes;
-        this.attributes[1]['arrow-end'] = 'none';
-        this.attributes[1]['stroke-linejoin'] = 'round';
-        this.attributes[1]['fill'] = this.map.selected ? 'red' : 'white';
-        this.attributes[1]['fill-opacity'] = '100%';
+        for (let i = 0; i < len; ++i)
+        {
+            this.attributes[i+len]['stroke-dasharray'] = MapPainter.defaultDashes;
+            this.attributes[i+len]['arrow-end'] = 'none';
+            this.attributes[i+len]['stroke-linejoin'] = 'round';
+            this.attributes[i+len]['fill'] = this.map.selected ? 
+                                             MapPainter.selectedColor : 
+                                             MapPainter.defaultColor;
 
-        let src = this.map.src.position;
-        let dst = this.map.dst.position;
-        if (src.x == dst.x || src.y == dst.y) return;
-        else this.attributes[0]['arrow-end'] = 'none';
+            let src = this.map.srcs[i].position;
+            let dst = this.map.dst.position;
+            if (src.x == dst.x || src.y == dst.y) continue;
+            else this.attributes[i]['arrow-end'] = 'none';
+        }
     }
 }

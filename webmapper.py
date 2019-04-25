@@ -81,7 +81,16 @@ def map_props(map):
     props = map.properties.copy()
     props['src'] = full_signame(map.signal(mpr.LOC_SRC))
     props['dst'] = full_signame(map.signal(mpr.LOC_DST))
-    props['key'] = props['src'] + '->' + props['dst']
+    num_srcs = props['num_sigs_in']
+    props['srcs'] = [full_signame(map.signal(mpr.LOC_SRC, i))
+                     for i in range(0, num_srcs)]
+    props['srcs'].sort();
+    if num_srcs > 1:
+        props['key'] = '['+','.join(props['srcs'])+']' + '->' + '['+props['dst']+']'
+    else:
+        props['key'] = props['src'] + '->' + props['dst']
+
+
     if props['process_loc'] == mpr.LOC_SRC:
         props['process_loc'] = 'src'
     else:
@@ -93,8 +102,8 @@ def map_props(map):
     else:
         del props['protocol']
     props['status'] = 'active'
+    props['id'] = str(props['id']) # if left as int js will lose precision & invalidate
     del props['is_local']
-    del props['id']
 
     slotprops = map.signal(mpr.LOC_SRC).properties
     if slotprops.has_key('min'):
@@ -143,8 +152,35 @@ def on_map(type, map, action):
 #        print 'ON_MAP (removed)', map_props(map)
         server.send_command("del_map", map_props(map))
 
+def find_sig(fullname):
+    names = fullname.split('/', 1)
+    dev = g.devices().filter(mpr.PROP_NAME, names[0]).next()
+    if dev:
+        sig = dev.signals().filter(mpr.PROP_NAME, names[1]).next()
+        return sig
+    else:
+        print 'error: could not find device', names[0]
+
+def find_map(srckeys, dstkey):
+    srcs = [find_sig(k) for k in srckeys]
+    dst = find_sig(dstkey)
+    if not (all(srcs) and dst): 
+        print srckeys, ' and ', dstkey, ' not found on network!'
+        return
+    intersect = dst.maps()
+    for s in srcs:
+        intersect = intersect.intersect(s.maps())
+    for m in intersect:
+        match = True
+        match = match and (m.index(dst) >= 0)
+        if match:
+            for s in srcs:
+                match = match and (m.index(s) >= 0)
+        if match: 
+            return m
+    return None
+
 def set_map_properties(props, map):
-    # todo: check for convergent maps, only release selected
     if not map:
         print "error: couldn't retrieve map ", props['src'], " -> ", props['dst']
         return
@@ -262,32 +298,28 @@ def subscribe(device):
         if dev:
             g.subscribe(dev, mpr.OBJ)
 
-def find_sig(fullname):
-    names = fullname.split('/', 1)
-    dev = g.devices().filter(mpr.PROP_NAME, names[0]).next()
-    if dev:
-        sig = dev.signals().filter(mpr.PROP_NAME, names[1]).next()
-        return sig
-    else:
-        print 'error: could not find device', names[0]
-
 def new_map(args):
-    if find_sig(args[0]) and find_sig(args[1]):
-        map = mpr.map(find_sig(args[0]), find_sig(args[1]))
-        if not map:
-            print 'error: failed to create map', args[0], "->", args[1]
-            return;
-        else:
-            print 'created map: ', args[0], ' -> ', args[1]
-        if len(args) > 2 and type(args[2]) is dict:
-            set_map_properties(args[2], map)
-        map.push()
+    srckeys, dstkey, props = args
+    srcs = [find_sig(k) for k in srckeys]
+    dst = find_sig(dstkey)
+    if not (all(srcs) and dst): 
+        print srckeys, ' and ', dstkey, ' not found on network!'
+        return
+
+    map = mpr.map(srcs, dst)
+    if not map:
+        print 'error: failed to create map', srckeys, "->", dstkey
+        return;
     else:
-       print args[0], ' and ', args[1], ' not found on network!'
+        print 'created map: ', srckeys, ' -> ', dstkey
+    if props and type(props) is dict:
+        set_map_properties(props, map)
+    map.push()
 
 def release_map(args):
-    # todo: check for convergent maps, only release selected
-    find_sig(args[0]).maps().intersect(find_sig(args[1]).maps()).release()
+    srckeys, dstkey = args
+    m = find_map(srckeys, dstkey)
+    if m != None: m.release()
 
 server.add_command_handler("subscribe", lambda x: subscribe(x))
 

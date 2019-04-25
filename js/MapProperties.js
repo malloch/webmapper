@@ -8,20 +8,20 @@ class MapProperties {
         this.mapProtocols = ["UDP", "TCP"];
 
         $(this.container).append(
-            "<div' class='topMenu' style='width:calc(75% - 170px);'>"+
+            "<div' class='topMenu' style='width:calc(100% - 605px);'>"+
                 "<div id='mapPropsTitle' class='topMenuTitle'><strong>MAP</strong></div>"+
-                "<div id='mapPropsDiv' class='topMenuContainer'></div>"+
+                "<div id='mapPropsDiv' style='position:absolute;left:0px;top:20px;width:100%;height:100%;'></div>"+
             "</div>");
 
         $('#mapPropsDiv').append(
-            "<div style='width:50%'>"+
-                "<div id='modes' class='signalControl disabled' style='width:50%; padding-bottom:5px;'>Mode: </div>"+
-                "<div id='protocols' class='signalControl disabled' style='width:50%; padding-bottom:5px;'>Protocol: </div>"+
-                "<div id='expression' class='signalControl disabled' style='width:100%; padding-top:5px;'>Expression: "+
-                    "<input type='text' id='expression 'class='expression' style='width:calc(100% - 90px)'></input>"+
-                "</div>"+
+            "<div class='topMenuContainer' style='width:190px;height:100%;'>"+
+                "<div id='protocols' class='signalControl disabled'>Protocol: </div>"+
+                "<div id='modes' class='signalControl disabled'>Mode: </div>"+
             "</div>"+
-            "<div id='ranges' style='width:50%'></div>");
+            "<div id='expression' class='signalControl disabled hidden' style='position:absolute;width:calc(100% - 200px);left:200px;top:-20px;height:100%;padding:5px;'>"+
+                "<textarea id='expression 'class='expression' style='width:100%;height:100%;resize:none'></textarea>"+
+            "</div>"+
+            "<div class='hidden' id='ranges' style='position:absolute;top:-20px;width:calc(100% - 200px);padding:5px;'></div>");
         
         //Add the mode controls
         for (var m in this.mapModes) {
@@ -61,22 +61,53 @@ class MapProperties {
 
     _addHandlers() {
         var self = this;
+        var counter = 0;
 
         $('#networkSelection').on('change', function(e) {
             command.send("select_network", e.currentTarget.value);
         });
 
-        //The expression and range input handlers
+        // The range input handler
         $('.topMenu').on({
             keydown: function(e) {
                 e.stopPropagation();
-                if (e.which == 13) { //'enter' key
+                if (e.which == 13 || e.which == 9) { //'enter' or 'tab' key
                     self.setMapProperty($(this).attr('id').split(' ')[0],
                                          this.value);
                 }
             },
             click: function(e) { e.stopPropagation(); },
+            focusout: function(e) {
+                e.stopPropagation();
+                self.setMapProperty($(this).attr('id').split(' ')[0],
+                                    this.value);
+            },
         }, 'input');
+
+        // The expression input handler
+        $('.topMenu').on({
+            keydown: function(e) {
+                e.stopPropagation();
+                if (e.which == 13) { //'enter' key
+                    if (counter >= 1) {
+                        console.log('sending updated expression');
+                        self.setMapProperty($(this).attr('id').split(' ')[0],
+                                            this.value);
+                         counter = 0;
+                    }
+                    else
+                        counter += 1;
+                }
+                else
+                    counter = 0;
+            },
+            click: function(e) { e.stopPropagation(); },
+            focusout: function(e) {
+                e.stopPropagation();
+                self.setMapProperty($(this).attr('id').split(' ')[0],
+                                    this.value);
+            },
+        }, 'textarea');
 
         //For the mode buttons
         $('.topMenu').on("click", '.mode', function(e) {
@@ -117,27 +148,18 @@ class MapProperties {
         });
     }
 
-    updateNetworkInterfaces() {
-        $('#networkSelection').children('*').remove();
-        for (var i in this.graph.networkInterfaces.available) {
-            let iface = this.graph.networkInterfaces.available[i];
-            if (iface == this.graph.networkInterfaces.selected)
-                $('#networkSelection').append("<option value='"+iface+"' selected>"+iface+"</option>");
-            else
-                $('#networkSelection').append("<option value='"+iface+"'>"+iface+"</option>");
-        }
-    }
-
     // clears and disables the map properties bar
     clearMapProperties() {
         $('.mode').removeClass('sel');
         $('.protocol').removeClass('sel');
-        $('.topMenu input').val('');
+        $('.topMenu .range').val('');
+        $('.topMenu textarea').val('');
         $('.signalControl').children('*').removeClass('disabled');
         $('.signalControl').addClass('disabled');
         $('#mapPropsTitle').addClass('disabled');
         $('.calibrate').removeClass('calibratesel');
         $('.setlinear').removeClass('setlinearsel');
+        $('.range').removeClass('calibratesel');
         $('.expression').removeClass('waiting');
         $('.ranges').children('*').removeClass('waiting');
     }
@@ -211,8 +233,17 @@ class MapProperties {
 
         if (mode != null && mode != 'multiple') {
             // capitalize first letter of mode
+            console.log('mode:', mode);
             mode = mode.charAt(0).toUpperCase() + mode.slice(1);
             $("#mode"+mode).addClass("sel");
+            if (mode == 'Linear') {
+                $("#expression").addClass('hidden');
+                $("#ranges").removeClass('hidden');
+            }
+            else {
+                $("#ranges").addClass('hidden');
+                $("#expression").removeClass('hidden');
+            }
         }
 
         if (proto != null && proto != 'multiple') {
@@ -221,6 +252,8 @@ class MapProperties {
 
         if (expression != null) {
             $(".expression").removeClass('waiting');
+            expression = expression.replace(/;;/, '');
+            expression = expression.replace(/;/g, ';\n');
             $(".expression").val(expression);
             if (expression == 'multiple expressions')
                 $(".expression").css({'font-style': 'italic'});
@@ -249,14 +282,26 @@ class MapProperties {
                 $("#dst_max").val(dst_max);
         }
 
-        if (src_calibrating == true)
+        if (src_calibrating == true) {
             $("#srcCalibrate").addClass("calibratesel");
-        else if (src_calibrating == false)
+            $("#src_min").addClass("calibratesel");
+            $("#src_max").addClass("calibratesel");
+        }
+        else if (src_calibrating == false) {
             $("#srcCalibrate").removeClass("calibratesel");
-        if (dst_calibrating == true)
+            $("#src_min").removeClass("calibratesel");
+            $("#src_max").removeClass("calibratesel");
+        }
+        if (dst_calibrating == true) {
             $("#dstCalibrate").addClass("calibratesel");
-        else if (dst_calibrating == false)
+            $("#dst_min").addClass("calibratesel");
+            $("#dst_max").addClass("calibratesel");
+        }
+        else if (dst_calibrating == false) {
             $("#dstCalibrate").removeClass("calibratesel");
+            $("#dst_min").removeClass("calibratesel");
+            $("#dst_max").removeClass("calibratesel");
+        }
     }
 
     // object with arguments for the map
@@ -271,7 +316,7 @@ class MapProperties {
         let container = $(this.container);
         let modes = this.mapModeCommands;
         this.graph.maps.filter(this.selected).each(function(map) {
-            if (map[key] == value || map[key] == parseFloat(value))
+            if (map[key] && (map[key] == value || map[key] == parseFloat(value)))
                 return;
 
             var msg = {};
@@ -284,18 +329,26 @@ class MapProperties {
             case 'protocol':
                 msg['protocol'] = value;
                 break;
+            case 'srcCalibrate':
+                msg['src_calibrating'] = !map.src_calibrating;
+                break;
             case 'srcRangeSwitch':
                 msg['src_max'] = String(map['src_min']);
                 msg['src_min'] = String(map['src_max']);
+                $("#src_max").addClass('waiting');
+                $("#src_min").addClass('waiting');
                 break;
             case 'dstRangeSwitch':
                 msg['dst_max'] = String(map['dst_min']);
                 msg['dst_min'] = String(map['dst_max']);
+                $("#dst_max").addClass('waiting');
+                $("#dst_min").addClass('waiting');
                 break;
             case 'muted':
                 msg['muted'] = !map['muted'];
                 break;
             case 'expression':
+                value = value.replace(/\r?\n|\r/g, '');
                 if (value == map.expression)
                     return;
                 msg['expression'] = value;
@@ -331,7 +384,8 @@ class MapProperties {
             }
 
             // copy src and dst names
-            msg['src'] = map['src'].key;
+            msg['srcs'] = []
+            for (let s of map.srcs) msg['srcs'].push(s.key);
             msg['dst'] = map['dst'].key;
 
             // send the command, should receive a /mapped message after.
