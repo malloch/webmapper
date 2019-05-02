@@ -665,13 +665,14 @@ function Graph() {
             for (var i in file.mapping.connections) {
                 let c = file.mapping.connections[i];
                 let map = {};
-                let src = {'name': c.source[0].slice(1)};
-                let dst = {'name': c.destination[0].slice(1)};
+                let src = {'name': c.src[0].slice(1)};
+                let dst = {'name': c.dest[0].slice(1)};
                 if (c.mute != null)
                     map.muted = c.mute ? true : false;
                 if (c.expression != null)
                     map.expression = c.expression.replace('s[', 'src[')
-                    .replace('d[', 'dst[');
+                    .replace('d[', 'dst[')
+                    .replace('dest[', 'dst[');
                 if (c.srcMin != null)
                     src.minimum = c.srcMin;
                 if (c.srcMax != null)
@@ -710,9 +711,10 @@ function Graph() {
             let map = file.mapping.maps[i];
             // TODO: enable multiple sources and destinations
             
+            let srcs = map.sources.map(s => s.name);
             let src = map.sources[0].name;
             let dst = map.destinations[0].name;
-            console.log('Map from file:', src,'->',dst);
+            console.log('Map from file:', srcs,'->',dst);
             if (!src || !dst) {
                 console.log("error adding map from file:", map);
                 continue;
@@ -745,18 +747,27 @@ function Graph() {
             if (map.expression) {
                 // fix expression
                 // TODO: better regexp to avoid conflicts with user vars
-                map.expression = map.expression.replace(/src/g, "x");
-                map.expression = map.expression.replace(/dst/g, "y");
+                map.expression = map.expression.replace('src[0]', "x")
+                                               .replace('dst[0]', "y")
+                                               .replace('dst', "y");
             }
+            console.log(map.expression)
 
+            srcs = srcs.map(s => s.slice(s.indexOf('/')));
             src = src.slice(src.indexOf('/'));
             dst = dst.slice(dst.indexOf('/'));
             let self = this;
             this.devices.each(function(d1) {
                 if (d1.hidden)
                     return;
+                let srcsigs = srcs.map(s => {
+                    if (typeof s !== 'string') return s;
+                    let sig = d1.signals.find(d1.name+s)
+                    if (sig) return sig;
+                    else return s;
+                });
                 let srcsig = d1.signals.find(d1.name+src);
-                if (!srcsig)
+                if (!srcsigs.every(s => typeof s.key === 'string'))
                     return;
                 let dstsig = null;
                 self.devices.each(function (d2) {
@@ -766,7 +777,7 @@ function Graph() {
                     if (!dstsig)
                         return;
                     console.log('  Creating map:', srcsig.key, '->', dstsig.key);
-                    mapper.map(srcsig.key, dstsig.key, map);
+                    mapper._map(srcsigs.map(s => s.key), dstsig.key, map);
                 });
             });
         }
