@@ -5,23 +5,8 @@
 'use strict';
 
 class HiveView extends View {
-    constructor(frame, tables, canvas, database, tooltip) {
-        super('hive', frame, null, canvas, database, tooltip);
-
-        // hide tables
-        tables.left.adjust(0, 0, 0, frame.height, 0, 1000, null, 0, 0);
-        tables.right.adjust(frame.width, 0, 0, frame.height, 0, 1000, null, 0, 0);
-
-        // start with signals at origin
-        this.database.devices.each(function(dev) {
-            dev.signals.each(function(sig) {
-                if (sig.index && !sig.position)
-                    sig.position = this.origin;
-            });
-        });
-
-        // remove link svg
-        this.database.links.each(remove_object_svg);
+    constructor(frame, tables, canvas, database, tooltip, pie) {
+        super('hive', frame, tables, canvas, database, tooltip, pie, HiveMapPainter);
 
         this.pan = this.canvasPan;
         this.zoom = this.canvasZoom;
@@ -30,13 +15,33 @@ class HiveView extends View {
 
         this.aspect = 1;
 
+        this.setup();
+    }
+
+    setup() {
+        this.setMapPainter(HiveMapPainter);
+
+        // hide tables
+        this.tables.left.adjust(this.frame.width * -0.4, 0, 0,
+                                this.frame.height, 0, 500, null, 0, 0);
+        this.tables.right.adjust(this.frame.width, 0, 0,
+                                 this.frame.height, 0, 500, null, 0, 0);
+        this.tables.left.hidden = this.tables.right.hidden = true;
+
+        // start with signals at origin
+        let self = this;
+        this.database.devices.each(function(dev) {
+            dev.signals.each(function(sig) {
+                if (sig.index && !sig.position)
+                    sig.position = self.origin;
+            })
+        });
+        this.setAllSigHandlers();
+
         this.resize();
     }
 
-    resize(newFrame, duration) {
-        if (newFrame)
-            this.frame = newFrame;
-
+    _resize(duration) {
         this.mapPane.left = 50;
         this.mapPane.width = this.frame.width - 100;
         this.mapPane.top = 50;
@@ -74,11 +79,12 @@ class HiveView extends View {
                          self.mapPane.top + self.mapPane.height],
                         ['l', x, y]]
             }
+            let color = Raphael.hsl(dev.hue, 1, 0.5);
             dev.view.animate({'path': path,
-                              'stroke': dev.color,
+                              'stroke': color,
                               'stroke-width': 26,
                               'stroke-opacity': 0.5,
-                              'fill': dev.color,
+                              'fill': color,
                               'fill-opacity': 0}, duration, '>');
             if (!dev.view.label) {
                 dev.view.label = self.canvas.text(0, 0, dev.name)
@@ -93,7 +99,8 @@ class HiveView extends View {
             let angle = Raphael.deg(Math.atan(y / x));
             x += self.mapPane.left;
             y += self.frame.height - self.mapPane.top - 30;
-            dev.view.label.animate({'opacity': 0.5,
+            dev.view.label.attr({'text-anchor': 'end'})
+                          .animate({'opacity': 0.5,
                                     'transform': 't'+x+','+y+'r'+angle+',0,30'
                                    }, duration, '>');
 
@@ -112,50 +119,13 @@ class HiveView extends View {
         });
     }
 
-//    getMapPath(map) {
-//        if (!map.view)
-//            return;
-//
-//        // draw L-R bezier
-//        let src = map.src.position;
-//        let dst = map.dst.position;
-//        if (!src || !dst) {
-//            console.log('missing signal positions for drawing map', map);
-//            return null;
-//        }
-//
-//        let path;
-//
-//        // calculate midpoint
-//        let mpx = (src.x + dst.x) * 0.5;
-//        let mpy = (src.y + dst.y) * 0.5;
-//
-//        if (map.src.device == map.dst.device) {
-//            // signals belong to same device
-//            mpx += (src.y - dst.y) * 0.5;
-//            mpy -= (src.x - dst.x) * 0.5;
-//            path = [['M', src.x, src.y],
-//                    ['S', mpx, mpy, dst.x, dst.y]];
-//        }
-//        else {
-//            // inflate midpoint around origin to create a curve
-//            mpx += (mpx - this.origin[0]) * 0.2;
-//            mpy += (mpy - this.origin[1]) * 0.2;
-//            path = [['M', src.x, src.y],
-//                    ['S', mpx, mpy, dst.x, dst.y]];
-//        }
-//
-//        // shorten path so it doesn't draw over signals
-//        let len = Raphael.getTotalLength(path);
-//        return Raphael.getSubpath(path, 12, len - 12);
-//    }
-
     draw(duration) {
         this.drawDevices(duration);
         this.drawMaps(duration);
     }
 
     update() {
+        let self = this;
         let elements;
         switch (arguments.length) {
             case 0:
@@ -168,39 +138,79 @@ class HiveView extends View {
                 elements = arguments;
                 break;
         }
-        if (elements.indexOf('devices') >= 0) {
-            let dev_num = this.database.devices.reduce(function(temp, dev) {
+        let updated = false;
+        if (elements.indexOf('devices') >= 0 || elements.indexOf('signals') >= 0) {
+            let dev_num = this.database.devices.reduce(function(t, dev) {
                 let uncollapsed = dev.collapsed ? 0 : 1;
-                return temp ? temp + uncollapsed : uncollapsed;
+                let unhidden = dev.hidden ? 0 : 1;
+                return uncollapsed && unhidden + (t ? t : 0);
             });
             dev_num = dev_num > 1 ? dev_num - 1 : 1;
-            let angleInc = (Math.PI * -0.5) / dev_num;
-            let hiveIndex = 0;
+            let angleInc = (Math.PI * 0.5) / dev_num;
+            let angle = -Math.PI * 0.5;
             let listIndex = 0;
             this.updateDevices(function(dev) {
                 if (dev.collapsed)
                     listIndex++;
                 else {
-                    dev.angle = hiveIndex * angleInc;
-                    hiveIndex++;
+                    dev.angle = angle;
+                    angle += angleInc;
                 }
                 return false;
             });
+            updated = true;
         }
-        if (elements.indexOf('signals') >= 0) {
-            this.updateSignals(function(sig) {
-                if (!sig.position)
-                    sig.position = position(null, null, self.frame);
-                return false;
-            });
-        }
-        if (elements.indexOf('maps') >= 0)
+        if (elements.indexOf('maps') >= 0) {
             this.updateMaps();
-        this.draw(1000);
+            updated = true;
+        }
+        if (updated)
+            this.draw(500);
     }
 
     cleanup() {
         super.cleanup();
         this.database.devices.each(function(dev) {dev.angle = null;});
+    }
+}
+
+class HiveMapPainter extends ListMapPainter
+{
+    constructor(map, canvas, frame, database) {
+        super(map, canvas, frame, database); 
+        this.shortenPath = 12;
+    }
+
+    getNodePosition()
+    {
+        let origin = {x: this.frame.left, y: this.frame.top + this.frame.height};
+        let node = super.getNodePosition();
+        node.x = node.x + (node.x - origin.x) * this.midPointInflation;
+        node.y = node.y + (node.y - origin.y) * this.midPointInflation;
+
+        // adjust node x so that it won't overlap with a device
+        let sigs = this.map.srcs.concat([this.map.dst]);
+        for (let s of sigs)
+        {
+            if (distance(node.x, node.y, s.position.x, s.position.y) < 200)
+            {
+                node.x += 50;
+                node.y += 50;
+            }
+        }
+        return node;
+    }
+
+    oneToOne(src, dst, i)
+    {
+        // draw a curved line from src to dst
+        let mid = {x: (src.x + dst.x) * 0.5, y: (src.y + dst.y) * 0.5};
+        let origin = {x: this.frame.left, y: this.frame.top + this.frame.height};
+
+        mid.x = mid.x + (mid.x - origin.x) * this.midPointInflation;
+        mid.y = mid.y + (mid.y - origin.y) * this.midPointInflation;
+
+        this.pathspecs[i] = [['M', src.x, src.y],
+                             ['S', mid.x, mid.y, dst.x, dst.y]];
     }
 }

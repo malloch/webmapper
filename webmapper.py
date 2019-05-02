@@ -9,13 +9,13 @@ from random import randint
 
 networkInterfaces = {'active': '', 'available': []}
 
-boundaryModes = ['Undefined', 'None', 'Mute', 'Clamp', 'Fold', 'Wrap']
-boundaryStrings = { 'Undefined': mapper.BOUND_UNDEFINED,
-                    'None': mapper.BOUND_NONE,
-                    'Mute': mapper.BOUND_MUTE,
-                    'Clamp': mapper.BOUND_CLAMP,
-                    'Fold': mapper.BOUND_FOLD,
-                    'Wrap': mapper.BOUND_WRAP }
+boundaryModes = ['undefined', 'none', 'mute', 'clamp', 'fold', 'wrap']
+boundaryStrings = { 'undefined': mapper.BOUND_UNDEFINED,
+                    'none': mapper.BOUND_NONE,
+                    'mute': mapper.BOUND_MUTE,
+                    'clamp': mapper.BOUND_CLAMP,
+                    'fold': mapper.BOUND_FOLD,
+                    'wrap': mapper.BOUND_WRAP }
 
 dirname = os.path.dirname(__file__)
 if dirname:
@@ -56,8 +56,10 @@ def dev_props(dev):
         props['synced'] = props['synced'].get_double()
     props['key'] = dev.name
     props['status'] = 'active'
-    del props['is_local']
-    del props['id']
+    if 'is_local' in props:
+        del props['is_local']
+    if 'id' in props:
+        del props['id']
     return props
 
 def link_props(link):
@@ -67,7 +69,7 @@ def link_props(link):
     props['key'] = link.device(0).name + '<->' + link.device(1).name
     props['status'] = 'active'
     del props['is_local']
-    del props['id']
+    props['id'] = str(props['id'])
     return props
 
 def sig_props(sig):
@@ -89,22 +91,30 @@ def full_signame(sig):
 
 def map_props(map):
     props = map.properties.copy()
+    print('getting map properties:')
+    print(props)
     props['src'] = full_signame(map.source().signal())
     props['dst'] = full_signame(map.destination().signal())
-    props['key'] = props['src'] + '->' + props['dst']
+    num_srcs = props['num_inputs']
+    props['srcs'] = [full_signame(map.source(i).signal()) 
+                     for i in range(0, num_srcs)]
+    props['srcs'].sort();
+    if num_srcs > 1: 
+        props['key'] = '['+','.join(props['srcs'])+']' + '->' + '['+props['dst']+']'
+    else: props['key'] = props['src'] + '->' + props['dst']
     if props['process_location'] == mapper.LOC_SOURCE:
         props['process_location'] = 'source'
     else:
         props['process_location'] = 'destination'
     if props['protocol'] == mapper.PROTO_UDP:
-        props['protocol'] = 'udp'
+        props['protocol'] = 'UDP'
     elif props['protocol'] == mapper.PROTO_TCP:
-        props['protocol'] = 'tcp'
+        props['protocol'] = 'TCP'
     else:
         del props['protocol']
     props['status'] = 'active'
+    props['id'] = str(props['id']) # if left as int js will lose precision & invalidate
     del props['is_local']
-    del props['id']
 
     # translate some other properties
     if props['mode'] == mapper.MODE_LINEAR:
@@ -146,7 +156,6 @@ def on_device(dev, action):
         server.send_command("del_device", dev_props(dev))
     elif action == mapper.EXPIRED:
 #        print 'ON_DEVICE (expired)', dev_props(dev)
-        server.send_command("del_device", dev_props(dev))
         db.flush()
 
 def on_link(link, action):
@@ -173,14 +182,40 @@ def on_map(map, action):
 #        print 'ON_MAP (removed)', map_props(map)
         server.send_command("del_map", map_props(map))
 
-def set_map_properties(props):
-    print 'incoming expression: ', props['expression']
-    # todo: check for convergent maps, only release selected
-    maps = find_sig(props['src']).maps().intersect(find_sig(props['dst']).maps())
-    map = maps.next()
-    if not map:
-        print "error: couldn't retrieve map ", props['src'], " -> ", props['dst']
+def find_sig(fullname):
+    names = fullname.split('/', 1)
+    dev = db.device(names[0])
+    if dev:
+        sig = dev.signal(names[1])
+        return sig
+    else:
+        print 'error: could not find device', names[0]
+
+def find_map(srckeys, dstkey):
+    srcs = [find_sig(k) for k in srckeys]
+    dst = find_sig(dstkey)
+    if not (all(srcs) and dst): 
+        print srckeys, ' and ', dstkey, ' not found on network!'
         return
+    intersect = dst.maps()
+    for s in srcs:
+        intersect = intersect.intersect(s.maps())
+    for m in intersect:
+        match = True
+        match = match and m.slot(dst)
+        if match:
+            for s in srcs:
+                match = match and m.slot(s)
+        if match: 
+            return m
+    return None
+
+def set_map_properties(props, map):
+    if not map:
+        map = find_map(props['srcs'], props['dst'])
+        if not map:
+            print "error: couldn't retrieve map ", props['src'], " -> ", props['dst']
+            return
     if props.has_key('mode'):
         if props['mode'] == 'linear':
             map.mode = mapper.MODE_LINEAR
@@ -188,6 +223,13 @@ def set_map_properties(props):
             map.mode = mapper.MODE_EXPRESSION
         else:
             print 'error: unknown mode ', props['mode']
+    if props.has_key('protocol'):
+        if props['protocol'] == 'UDP':
+            map.protocol = mapper.PROTO_UDP
+        elif props['protocol'] == 'TCP':
+            map.protocol = mapper.PROTO_TCP
+        else:
+            print 'error: unknown protocol ', props['protocol']
     if props.has_key('expression'):
         map.expression = props['expression']
     if props.has_key('muted'):
@@ -256,7 +298,6 @@ def set_map_properties(props):
         slot.bound_min = boundaryStrings[props['dst_bound_min']]
     if props.has_key('dst_bound_max'):
         slot.bound_max = boundaryStrings[props['dst_bound_max']]
-#    print 'pushing map'
     map.push()
 
 def on_save(arg):
@@ -269,10 +310,13 @@ def on_load(arg):
 
 def select_network(newNetwork):
     global db
+    if networkInterfaces['active'] == newNetwork:
+        return
+    db.flush(0)
     networkInterfaces['active'] = newNetwork
     net = mapper.network(networkInterfaces['active'])
-    db.mapper.database(net, mapper.OBJ_DEVICES | mapper.OBJ_LINKS)
-    server.send_command('set_network', newNetwork)
+    db = mapper.database(net)
+    server.send_command("active_network", newNetwork)
 
 def get_networks(arg):
     location = netifaces.AF_INET    # A computer specific integer for internet addresses
@@ -306,32 +350,28 @@ def subscribe(device):
         if dev:
             db.subscribe(dev, mapper.OBJ_ALL)
 
-def find_sig(fullname):
-    names = fullname.split('/', 1)
-    dev = db.device(names[0])
-    if dev:
-        sig = dev.signal(names[1])
-        return sig
-    else:
-        print 'error: could not find device', dev
-
 def new_map(args):
-    if find_sig(args[0]) and find_sig(args[1]):
-        map = mapper.map(find_sig(args[0]), find_sig(args[1]))
-        if not map:
-            print 'error: failed to create map', args[0], "->", args[1]
-            return;
-        else:
-            print 'created map: ', args[0], ' -> ', args[1]
-        if len(args) > 2 and type(args[2]) is dict:
-            set_map_properties(args[2]) #map.set_properties doesn't seem to work
-        map.push()
+    srckeys, dstkey, props = args
+    srcs = [find_sig(k) for k in srckeys]
+    dst = find_sig(dstkey)
+    if not (all(srcs) and dst): 
+        print srckeys, ' and ', dstkey, ' not found on network!'
+        return
+
+    map = mapper.map(srcs, dst)
+    if not map:
+        print 'error: failed to create map', srckeys, "->", dstkey
+        return;
     else:
-       print args[0], ' and ', args[1], ' not found on network!'
+        print 'created map: ', srckeys, ' -> ', dstkey
+    if props and type(props) is dict:
+        set_map_properties(props, map)
+    map.push()
 
 def release_map(args):
-    # todo: check for convergent maps, only release selected
-    find_sig(args[0]).maps().intersect(find_sig(args[1]).maps()).release()
+    srckeys, dstkey = args
+    m = find_map(srckeys, dstkey)
+    if m != None: m.release()
 
 server.add_command_handler("subscribe", lambda x: subscribe(x))
 
@@ -344,7 +384,7 @@ server.add_command_handler("add_links",
 server.add_command_handler("add_maps",
                            lambda x: ("add_maps", map(map_props, db.maps())))
 
-server.add_command_handler("set_map", lambda x: set_map_properties(x))
+server.add_command_handler("set_map", lambda x: set_map_properties(x, None))
 
 server.add_command_handler("map", lambda x: new_map(x))
 

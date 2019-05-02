@@ -5,66 +5,66 @@
 'use strict';
 
 class GridView extends View {
-    constructor(frame, tables, canvas, database, tooltip) {
+    constructor(frame, tables, canvas, database, tooltip, pie) {
         super('grid', frame, {'left': tables.left, 'right': tables.right},
-              canvas, database, tooltip);
+              canvas, database, tooltip, pie, GridMapPainter);
+
+        this.escaped = false;
+        this.leftExpandWidth = 200;
+        this.rightExpandWidth = 200;
+        this.setup();
+    }
+
+    setup() {
+        this.setMapPainter(GridMapPainter);
+        this.setTableDrag();
 
         // set left table properties
         this.tables.left.filterByDirection('output');
-        this.tables.left.showDetail(false);
-        this.tables.left.expand = true;
 
         // set right table properties
         this.tables.right.snap = 'bottom';
         this.tables.right.filterByDirection('input');
-        this.tables.right.showDetail(false);
-        this.tables.right.expand = true;
+
+        // set global table properties
+        for (var i in this.tables) {
+            let t = this.tables[i];
+            t.hidden = false;
+            t.showDetail(false);
+            t.expand = true;
+            t.scrolled = 0;
+            t.zoomed = 1;
+        }
 
         let self = this;
         this.database.devices.each(function(dev) {
-            // remove signal svg
             dev.signals.each(remove_object_svg);
             remove_object_svg(dev);
         });
 
-        // remove link svg
-        this.database.links.each(remove_object_svg);
-
-        this.map_pane;
-        this.escaped = false;
-
-        this.pan = this.tablePan;
-        this.zoom = this.tableZoom;
-
-        this.leftExpandWidth = 200;
-        this.rightExpandWidth = 200;
-
-        this.tables.left.collapseHandler = function() {
+        this.tables.left.resizeHandler = function() {
             if (self.tables.left.expandWidth != self.leftExpandWidth) {
                 self.leftExpandWidth = self.tables.left.expandWidth;
-                self.resize(null, 1000);
+                self.resize(null, 500);
             }
-            self.drawMaps()
+            self.drawMaps(0);
         };
-        this.tables.right.collapseHandler = function() {
+        this.tables.right.resizeHandler = function() {
             if (self.tables.right.expandWidth != self.rightExpandWidth) {
                 self.rightExpandWidth = self.tables.right.expandWidth;
-                self.resize(null, 1000);
+                self.resize(null, 500);
             }
-            self.drawMaps()
+            self.drawMaps(0);
         };
 
         this.update();
-        this.resize(null, 1000);
+        this.resize(null, 500);
 
         // move svg canvas to front
         $('#svgDiv').css({'position': 'relative', 'z-index': 2});
     }
 
-    resize(newFrame, duration) {
-        if (newFrame)
-            this.frame = newFrame;
-
+    _resize(duration) {
         let self = this;
         this.tables.left.adjust(0, this.rightExpandWidth-20, this.leftExpandWidth,
                                 this.frame.height - this.rightExpandWidth + 20,
@@ -73,7 +73,7 @@ class GridView extends View {
                                  this.rightExpandWidth,
                                  this.frame.width - this.leftExpandWidth + 20,
                                  -Math.PI * 0.5, duration,
-                                 function() {self.draw(1000)},
+                                 function() {self.draw(500)},
                                  this.rightExpandWidth-this.frame.height,
                                  this.frame.height);
         this.mapPane.left = this.leftExpandWidth;
@@ -84,19 +84,12 @@ class GridView extends View {
         this.mapPane.cy = this.mapPane.top + this.mapPane.height * 0.5;
 
         $('#svgDiv').css({'left': this.mapPane.left,
-                          'top': this.mapPane.top,
-                          'width': this.mapPane.width,
-                          'height': this.mapPane.height});
+                          'top': this.mapPane.top});
         $('svg').css({'left': -this.mapPane.left,
-                      'top': -this.mapPane.top,
-                      'width': this.frame.width,
-                      'height': this.frame.height});
-
-        this.draw();
+                      'top': -this.mapPane.top});
     }
 
     draw(duration) {
-//        this.drawDevices(duration);
         this.drawMaps(duration);
     }
 
@@ -104,7 +97,7 @@ class GridView extends View {
         let elements;
         switch (arguments.length) {
             case 0:
-                elements = ['devices', 'maps'];
+                elements = ['devices', 'signals', 'maps'];
                 break;
             case 1:
                 elements = [arguments[0]];
@@ -113,23 +106,38 @@ class GridView extends View {
                 elements = arguments;
                 break;
         }
-        if (elements.indexOf('devices') >= 0) {
+        let updated = false;
+        if (elements.indexOf('devices') >= 0 || elements.indexOf('signals') >= 0) {
             this.updateDevices();
-            let updated = false;
+            let grow = false;
             if (this.tables.left.expandWidth != this.leftExpandWidth) {
                 this.leftExpandWidth = this.tables.left.expandWidth;
-                updated = true;
+                grow = true;
             }
             if (this.tables.right.expandWidth != this.rightExpandWidth) {
                 this.rightExpandWidth = this.tables.right.expandWidth;
-                updated = true;
+                grow = true;
             }
-            if (updated)
-                this.resize(null, 1000);
+            if (grow)
+                this.resize(null, 500);
+            updated = true;
         }
-        if (elements.indexOf('maps') >= 0)
+        if (elements.indexOf('maps') >= 0) {
             this.updateMaps();
-        this.draw(1000);
+            updated = true;
+        }
+        if (updated)
+            this.draw(500);
+    }
+
+    pan(x, y, delta_x, delta_y) {
+        if (this.tablePan(x, y, delta_x, delta_y))
+            this.drawMaps();
+    }
+
+    zoom(x, y, delta) {
+        if (this.tableZoom(x, y, delta))
+            this.drawMaps();
     }
 
     cleanup() {
@@ -138,13 +146,9 @@ class GridView extends View {
         // reposition svg canvas and send to back
         $('#svgDiv').css({'z-index': 0,
                           'left': 0,
-                          'top': 0,
-                          'width': this.frame.width,
-                          'height': this.frame.height});
+                          'top': 0});
         $('svg').css({'left': 0,
-                      'top': 0,
-                      'width': this.frame.width,
-                      'height': this.frame.height});
+                      'top': 0});
 
         this.database.devices.each(function(dev) {
             dev.signals.each(function(sig) {
@@ -154,5 +158,83 @@ class GridView extends View {
                 }
             });
         });
+    }
+}
+
+class GridMapPainter extends ListMapPainter
+{
+    constructor(map, canvas, frame, database) {super(map, canvas, frame, database);}
+
+    convergent()
+    {
+        this.pathspecs = []; // so that there won't be any spare triangles left lying about
+        let dst = this.map.dst.position;
+        for (let i = 0; i < this.map.srcs.length; ++i)
+        {
+            let src = this.map.srcs[i].position;
+            this.oneToOne(src, dst, i);
+        }
+    }
+
+    betweenTables(src, dst, i)
+    {
+        let len = this.map.srcs.length;
+        let srctodst = src.vx == 1;
+        let mid = srctodst ? {x: dst.x, y: src.y} : {x: src.x, y: dst.y};
+        let end = srctodst ? {x: dst.x, y: dst.y < src.y ? dst.y : src.y}
+                           : {x: dst.x < src.x ? dst.x : src.x, y: dst.y};
+
+        this.pathspecs[i] = [['M', src.x, src.y],
+                            ['L', mid.x, mid.y],
+                            ['L', end.x, end.y]];
+
+        if (typeof dst.left === 'undefined') // dst is not a table row (i.e. user is making a map)
+        {
+            return;
+        }
+
+        let stroke = this.attributes[i+len]['stroke-width'];
+        if (srctodst) this.pathspecs[i+len] = 
+            [['M', dst.x, src.top + stroke + 1],
+             ['L', dst.left + stroke, src.top + src.height - stroke + 2],
+             ['l', dst.width - stroke - 2, 0],
+             ['Z']]
+
+        else this.pathspecs[i+len] =
+            [['M', src.left + stroke, dst.y],
+             ['L', src.left + src.width - stroke + 2, dst.top + stroke],
+             ['l', 0, dst.height - stroke - 2],
+             ['Z']];
+    }
+
+    // disable drawing convergent maps in grid view for now
+    updatePaths()
+    {
+        let i = 0, len = this.map.srcs.length;
+        let dst = this.map.dst.position;
+        for (; i < len; i++) {
+            this.oneToOne(this.map.srcs[i].position, dst, i);
+        }
+    }
+
+    updateAttributes()
+    {
+        let len = this.map.srcs.length;
+        this._defaultAttributes(2*len);
+
+        for (let i = 0; i < len; ++i)
+        {
+            this.attributes[i+len]['stroke-dasharray'] = MapPainter.defaultDashes;
+            this.attributes[i+len]['arrow-end'] = 'none';
+            this.attributes[i+len]['stroke-linejoin'] = 'round';
+            this.attributes[i+len]['fill'] = this.map.selected ? 
+                                             MapPainter.selectedColor : 
+                                             MapPainter.defaultColor;
+
+            let src = this.map.srcs[i].position;
+            let dst = this.map.dst.position;
+            if (src.x == dst.x || src.y == dst.y) continue;
+            else this.attributes[i]['arrow-end'] = 'none';
+        }
     }
 }

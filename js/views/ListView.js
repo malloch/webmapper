@@ -5,61 +5,53 @@
 'use strict';
 
 class ListView extends View {
-    constructor(frame, tables, canvas, database, tooltip) {
+    constructor(frame, tables, canvas, database, tooltip, pie) {
         super('list', frame, {'left': tables.left, 'right': tables.right},
-              canvas, database, tooltip);
+              canvas, database, tooltip, pie, ListMapPainter);
+
+        this.setup();
+    }
+
+    setup() {
+        this.setMapPainter(ListMapPainter);
+        this.setTableDrag();
 
         // set left table properties
         this.tables.left.filterByDirection('output');
-        this.tables.left.showDetail(true);
-        this.tables.left.expand = false;
 
         // set right table properties
         this.tables.right.snap = 'left';
         this.tables.right.filterByDirection('input');
-        this.tables.right.showDetail(true);
-        this.tables.right.expand = false;
+
+        // set global table properties
+        for (var i in this.tables) {
+            let t = this.tables[i];
+            t.hidden = false;
+            t.showDetail(true);
+            t.expand = false;
+            t.scrolled = 0;
+            t.zoomed = 1;
+            t.update();
+        }
 
         let self = this;
         this.database.devices.each(function(dev) {
-            // remove signal svg
             dev.signals.each(remove_object_svg);
-
             if (!dev.view)
                 return;
-            // remove device labels
-            if (dev.view.label) {
-                dev.view.label.remove();
-                dev.view.label = null;
-            }
-            // change device click
-            dev.view.unclick().click(function(e) {
-                dev.collapsed ^= 3;
-                self.updateDevices();
-                self.draw(1000);
-            });
-            // change device hover
             dev.view.unhover();
+            remove_object_svg(dev);
         });
 
-        this.tables.left.collapseHandler = function() {self.drawMaps()};
-        this.tables.right.collapseHandler = function() {self.drawMaps};
-
-        // remove link svg
-        this.database.links.each(remove_object_svg);
+        this.tables.left.resizeHandler = function() {self.drawMaps()};
+        this.tables.right.resizeHandler = function() {self.drawMaps()};
 
         this.escaped = false;
 
-        this.pan = this.tablePan;
-        this.zoom = this.tableZoom;
-
-        this.resize(null, 1000);
+        this.resize(null, 500);
     }
 
-    resize(newFrame, duration) {
-        if (newFrame)
-            this.frame = newFrame;
-
+    _resize(duration) {
         let self = this;
         this.tables.left.adjust(0, 0, this.frame.width * 0.4, this.frame.height, 0,
                                 duration);
@@ -71,11 +63,9 @@ class ListView extends View {
         this.mapPane.height = this.frame.height;
         this.mapPane.cx = this.frame.width * 0.5;
         this.mapPane.cy = this.frame.height * 0.5;
-        this.draw();
     }
 
     draw(duration) {
-        this.drawDevices(duration);
         this.drawMaps(duration);
     }
 
@@ -92,11 +82,27 @@ class ListView extends View {
                 elements = arguments;
                 break;
         }
-        if (elements.indexOf('devices') >= 0 || elements.indexOf('signals') >= 0)
+        let updated = false;
+        if (elements.indexOf('devices') >= 0 || elements.indexOf('signals') >= 0) {
             this.updateDevices();
-        if (elements.indexOf('maps') >= 0)
+            updated = true;
+        }
+        if (elements.indexOf('maps') >= 0) {
             this.updateMaps();
-        this.draw(1000);
+            updated = true;
+        }
+        if (updated)
+            this.draw(500);
+    }
+
+    pan(x, y, delta_x, delta_y) {
+        if (this.tablePan(x, y, delta_x, delta_y))
+            this.drawMaps();
+    }
+
+    zoom(x, y, delta) {
+        if (this.tableZoom(x, y, delta))
+            this.drawMaps();
     }
 
     cleanup() {
@@ -112,3 +118,107 @@ class ListView extends View {
         });
     }
 }
+
+class ListMapPainter extends MapPainter
+{
+    constructor(map, canvas, frame, database)
+    {
+        super(map, canvas, frame, database);
+    }
+
+    oneToOne(src, dst, i)
+    {
+        // skip maps if src or dst y is zero, due to filtering
+        if (!src.y || !dst.y) {
+            this.pathspecs[i] = null;
+            return;
+        }
+
+        if (Math.abs(src.x - dst.x) < 1)
+            this.vertical(src, dst, i);
+        else if (Math.abs(src.y - dst.y) < 1)
+            this.horizontal(src, dst, i);
+        else this.betweenTables(src, dst, i);
+    }
+
+    betweenTables(src, dst, i, dstPos)
+    {
+        let mpx = dstPos ? dst.x : (src.x + dst.x) * 0.5;
+        this.pathspecs[i] = [['M', src.x, src.y],
+                            ['C', mpx, src.y, mpx, dst.y, dst.x, dst.y]];
+    }
+
+    vertical(src, dst, i) 
+    {
+        // signals are inline vertically
+        let offset = this.offset(src.y, dst.y);
+        let ctlx = src.x + offset * src.vx;
+        this.pathspecs[i] = [['M', src.x, src.y], 
+                            ['C', ctlx, src.y, ctlx, dst.y, dst.x, dst.y]];
+    }
+
+    horizontal(src, dst, i) 
+    {
+        // signals are inline horizontally
+        let offset = this.offset(src.x, dst.x);
+        let ctly = src.y + offset * src.vy;
+        this.pathspecs[i] = [['M', src.x, src.y],
+                            ['C', src.x, ctly, dst.x, ctly, dst.x, dst.y]];
+    }
+
+    offset(a, b, minoffset = 30, maxoffset = 200)
+    {
+        let offset = Math.abs(a - b) * 0.5;
+        if (offset > maxoffset) offset = maxoffset;
+        if (offset < minoffset) offset = minoffset;
+        return offset;
+    }
+
+    updateAttributes()
+    {
+        let num_srcs = this.map.srcs.length;
+        if (num_srcs > 1)
+        {
+            let hidden = true;
+            this._defaultAttributes(num_srcs + 2);
+            let i = 0;
+            for (; i < num_srcs; ++i)
+            {
+                hidden = hidden && this.map.srcs[i].hidden;
+                if (this.map.srcs[i].hidden) this.attributes[i]['stroke'] = 'none';
+                this.attributes[i]['arrow-end'] = 'none';
+            }
+
+            if (hidden)
+            {
+                this.attributes[i].stroke = 'none';
+                this.attributes[i+1].stroke = 'none';
+            }
+            else
+            {
+                this.attributes[i+1].fill = this.map.selected ? 
+                                            MapPainter.selectedColor : 
+                                            MapPainter.defaultColor;
+                this.attributes[i+1]['arrow-end'] = 'none'
+            }
+        }
+        else this._defaultAttributes();
+    }
+
+    getNodePosition() {
+        return super.getNodePosition(50);
+    }
+}
+
+var ListViewSlices =
+[
+    {angle: 90, color: 'none', items: [
+        ConvergentMappingSlices[0].items[0], 
+        ConvergentMappingSlices[1].items[0], 
+        ConvergentMappingSlices[2].items[0], 
+        ConvergentMappingSlices[3].items[0]
+    ]},
+    {angle: 270, color: 'none'},
+    {angle: 271, color: 'none'},
+    {angle: 272, color: 'none'}
+];

@@ -5,28 +5,32 @@
 'use strict';
 
 class ParallelView extends View {
-    constructor(frame, tables, canvas, database, tooltip) {
-        super('parallel', frame, null, canvas, database, tooltip);
-
-        // hide tables
-        tables.left.adjust(0, 0, 0, frame.height, 0, 1000, null, 0, 0);
-        tables.right.adjust(frame.width, 0, 0, frame.height, 0, 1000, null, 0, 0);
-
-        // remove link svg
-        this.database.links.each(remove_object_svg);
+    constructor(frame, tables, canvas, database, tooltip, pie) {
+        super('parallel', frame, tables, canvas, database, tooltip, pie,
+              ParallelMapPainter);
 
         this.pan = this.canvasPan;
-//        this.zoom = this.canvasZoom;
 
         this.shortenPaths = 12;
+
+        this.setup();
+    }
+
+    setup() {
+        this.setMapPainter(ParallelMapPainter);
+        this.setAllSigHandlers();
+
+        // hide tables
+        this.tables.left.adjust(this.frame.width * -0.4, 0, 0,
+                                this.frame.height, 0, 500, null, 0, 0);
+        this.tables.right.adjust(this.frame.width, 0, 0,
+                                 this.frame.height, 0, 500, null, 0, 0);
+        this.tables.left.hidden = this.tables.right.hidden = true;
 
         this.resize();
     }
 
-    resize(newFrame, duration) {
-        if (newFrame)
-            this.frame = newFrame;
-
+    _resize(duration) {
         this.mapPane.left = 50;
         this.mapPane.width = this.frame.width - 100;
         this.mapPane.top = 50;
@@ -44,16 +48,17 @@ class ParallelView extends View {
         let sigInc = numSigs > 1 ? height / (numSigs - 1) : height;
 
         dev.view.toBack();
-        let x = self.mapPane.left + self.mapPane.width - devInc * dev.index;
+        let x = self.mapPane.left + devInc * dev.index;
         let y = self.mapPane.top + height;
+        let color = Raphael.hsl(dev.hue, 1, 0.5);
         dev.view.attr({'stroke-linecap': 'round'});
         dev.view.animate({'path': [['M', x, y],
                                    ['l', 0, -height]],
-                         'stroke': dev.color,
-                         'stroke-width': 26,
-                         'stroke-opacity': 0.5,
-                         'fill': dev.color,
-                         'fill-opacity': 0}, duration, '>');
+                          'stroke': color,
+                          'stroke-width': 26,
+                          'stroke-opacity': 0.5,
+                          'fill': color,
+                          'fill-opacity': 0}, duration, '>');
         if (!dev.view.label) {
             dev.view.label = self.canvas.text(0, 0, dev.name)
                                         .attr({'opacity': 0,
@@ -63,23 +68,28 @@ class ParallelView extends View {
                                                'text-anchor': 'end'});
         }
         let labely = y - height - 30;
-        dev.view.label.animate({'opacity': 0.5,
+        dev.view.label.attr({'text-anchor': 'end'})
+                      .animate({'opacity': 0.5,
                                 'transform': 't'+x+','+labely+'r-90,0,30'
                                }, duration, '>');
         dev.signals.each(function(sig) {
-                         if (!sig.view)
-                         return;
-                         // assign position along line
-                         sig.position.x = x;
-                         sig.position.y = y - sigInc * (sig.index);
-                         self.drawSignal(sig, duration);
+            if (!sig.view)
+                return;
+            // assign position along line
+            sig.position.x = x;
+            sig.position.y = y - sigInc * (sig.index);
+            sig.position.vx = sig.position.x < self.frame.width / 2 ? 1 : -1;
+            self.drawSignal(sig, duration);
         });
     }
 
     drawDevices(duration, dev) {
         let self = this;
 
-        let dev_num = this.database.devices.size();
+        let dev_num = this.database.devices.reduce(function(t, d) {
+            let unhidden = d.hidden ? 0 : 1;
+            return t ? t + unhidden : unhidden;
+        });
         if (dev_num && dev_num > 1)
             dev_num -= 1;
         else
@@ -94,37 +104,6 @@ class ParallelView extends View {
             });
         }
     }
-
-//    getMapPath(map) {
-//        if (!map.view)
-//            return;
-//
-//        // draw L-R bezier
-//        let src = map.src.position;
-//        let dst = map.dst.position;
-//        if (!src || !dst) {
-//            console.log('missing signal positions for drawing map', map);
-//            return null;
-//        }
-//
-//        let path;
-//
-//        if (src.x == dst.x) {
-//            // signals belong to same device
-//            let offsetx = src.x + (src.y - dst.y) * 0.5;
-//            path = [['M', src.x, src.y],
-//                    ['C', offsetx, src.y, offsetx, dst.y, dst.x, dst.y]];
-//        }
-//        else {
-//            let mpx = (src.x + dst.x) * 0.5;
-//            path = [['M', src.x, src.y],
-//                    ['C', mpx, src.y, mpx, dst.y, dst.x, dst.y]];
-//        }
-//
-//        // shorten path so it doesn't draw over signals
-//        let len = Raphael.getTotalLength(path);
-//        return Raphael.getSubpath(path, 12, len - 12);
-//    }
 
     draw(duration) {
         this.drawDevices(duration);
@@ -145,19 +124,17 @@ class ParallelView extends View {
                 elements = arguments;
                 break;
         }
-        if (elements.indexOf('devices') >= 0)
+        let updated = false;
+        if (elements.indexOf('devices') >= 0 || elements.indexOf('signals') >= 0) {
             this.updateDevices();
-        if (elements.indexOf('signals') >= 0) {
-            this.updateSignals(function(sig) {
-                if (!sig.position)
-                    sig.position = position(null, null, self.frame);
-                return false;
-            });
+            updated = true;
         }
-
-        if (elements.indexOf('maps') >= 0)
+        if (elements.indexOf('maps') >= 0) {
             this.updateMaps();
-        this.draw(1000);
+            updated = true;
+        }
+        if (updated)
+            this.draw(500);
     }
 
     pan(x, y, delta_x, delta_y) {
@@ -165,7 +142,6 @@ class ParallelView extends View {
     }
 
     zoom(x, y, delta) {
-        console.log('zoom', x, y, delta);
         // check if cursor is over a device
         if (this.hoverDev) {
             // zoom this device only
@@ -182,5 +158,29 @@ class ParallelView extends View {
         }
         else
             this.canvasZoom(x, y, delta);
+    }
+}
+
+class ParallelMapPainter extends ListMapPainter
+{
+    constructor(map, canvas, frame, database) { 
+        super(map, canvas, frame, database); 
+        this.shortenPath = 12;
+    }
+
+    getNodePosition()
+    {
+        // adjust node x so that it won't overlap with a device
+        let node = super.getNodePosition();
+        let sigs = this.map.srcs.concat([this.map.dst]);
+        for (let s of sigs)
+        {
+            if (Math.abs(node.x - s.position.x) < 50) 
+            {
+                node.x += 50;
+                node.y += 50;
+            }
+        }
+        return node;
     }
 }

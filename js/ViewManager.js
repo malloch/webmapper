@@ -14,8 +14,10 @@ class ViewManager
         this.canvas_zoom = 1;
         this.canvas_pan = [0, 0];
 
-        this.srcregexp = null;
-        this.dstregexp = null;
+        this.srcRE = null;
+        this.dstRE = null;
+
+        this.views = [];
 
         // remove all previous DOM elements
         $(this.container).empty();
@@ -24,100 +26,113 @@ class ViewManager
         this._selection_handlers();
         this._keyboard_handlers();
         this._add_database_callbacks();
+        this.pie = new Pie(this.canvas, ConvergentMappingSlices);
 
         let self = this;
         this.database.devices.each(function(dev) { self._update_devices(dev, 'added'); });
         this.database.maps.each(function(map) { self._update_maps(map, 'added'); });
 
-        this.switch_view('chord');
+        this.currentView = null;
+        setTimeout(function() {
+            self.switch_view('chord');
+        }, 100);
     }
 
     zoom(x, y, delta) {
-        this.view.zoom(x, y, delta);
+        this.views[this.currentView].zoom(x, y, delta);
     }
 
     pan(x, y, delta_x, delta_y) {
-        this.view.pan(x, y, delta_x, delta_y);
+        this.views[this.currentView].pan(x, y, delta_x, delta_y);
     }
 
     resetPanZoom() {
-        this.view.resetPanZoom();
+        this.views[this.currentView].resetPanZoom();
     }
 
     on_resize() {
         this.frame = fullOffset($(this.container)[0]);
-        this.view.resize(this.frame);
+        this.views[this.currentView].resize(this.frame);
         this.tooltip.hide();
     }
 
     filterSignals(searchbar, text) {
         // need to cache regexp here so filtering works across view transitions
         if (searchbar == 'srcSearch') {
-            this.srcregexp = text ? new RegExp(text, 'i') : null;
-            this.view.filterSignals('src', text.length ? text : null);
+            this.database.srcRE = text ? new RegExp(text, 'i') : new RegExp('.*');
+            this.views[this.currentView].filterSignals('src');
         }
         else {
-            this.dstregexp = text ? new RegExp(text, 'i') : null;
-            this.view.filterSignals('dst', text.length ? text : null);
+            this.database.dstRE = text ? new RegExp(text, 'i') : new RegExp('.*');
+            this.views[this.currentView].filterSignals('dst');
         }
     }
 
     loadFile(file) {
-        if (this.view && this.view.type() == 'chord')
-            this.view.stageFile(file);
+        if (this.currentView == 'chord')
+            this.views[this.currentView].stageFile(file);
     }
 
     switch_view(viewType) {
-        if (this.view) {
-            if (this.view.type == viewType) {
+        if (this.currentView) {
+            if (this.currentView == viewType) {
                 // already on correct view
                 return;
             }
             // call cleanup for previous view
-            this.view.cleanup();
+            this.views[this.currentView].cleanup();
         }
 
-        switch (viewType) {
-            case 'balloon':
-                this.view = new BalloonView(this.frame, this.tables, this.canvas,
-                                            this.database, this.tooltip);
-                break;
-            case 'canvas':
-                this.view = new CanvasView(this.frame, this.tables, this.canvas,
-                                           this.database, this.tooltip);
-                break;
-            case 'graph':
-                this.view = new GraphView(this.frame, this.tables, this.canvas,
-                                          this.database, this.tooltip);
-                break;
-            case 'grid':
-                this.view = new GridView(this.frame, this.tables, this.canvas,
-                                         this.database, this.tooltip);
-                break;
-            case 'parallel':
-                this.view = new ParallelView(this.frame, this.tables, this.canvas,
-                                             this.database, this.tooltip);
-                break;
-            case 'hive':
-                this.view = new HiveView(this.frame, this.tables, this.canvas,
-                                         this.database, this.tooltip);
-                break;
-            case 'chord':
-                this.view = new ChordView(this.frame, this.tables, this.canvas,
-                                          this.database, this.tooltip);
-                break;
-            case 'console':
-                this.view = new ConsoleView(this.frame, this.tables, this.canvas,
-                                            this.database, this.tooltip);
-                break;
-            case 'list':
-            default:
-                this.view = new ListView(this.frame, this.tables, this.canvas,
-                                         this.database, this.tooltip);
-                break;
+        if (this.views[viewType]) {
+            this.views[viewType].setup();
+        }
+        else {
+            let view;
+            switch (viewType) {
+                case 'balloon':
+                    view = new BalloonView(this.frame, this.tables, this.canvas,
+                                           this.database, this.tooltip, this.pie);
+                    break;
+                case 'canvas':
+                    view = new CanvasView(this.frame, this.tables, this.canvas,
+                                          this.database, this.tooltip, this.pie);
+                    break;
+                case 'graph':
+                    view = new GraphView(this.frame, this.tables, this.canvas,
+                                         this.database, this.tooltip, this.pie);
+                    break;
+                case 'grid':
+                    view = new GridView(this.frame, this.tables, this.canvas,
+                                        this.database, this.tooltip, this.pie);
+                    break;
+                case 'parallel':
+                    view = new ParallelView(this.frame, this.tables, this.canvas,
+                                            this.database, this.tooltip, this.pie);
+                    break;
+                case 'hive':
+                    view = new HiveView(this.frame, this.tables, this.canvas,
+                                        this.database, this.tooltip, this.pie);
+                    break;
+                case 'chord':
+                    view = new ChordView(this.frame, this.tables, this.canvas,
+                                         this.database, this.tooltip, this.pie);
+                    break;
+                case 'console':
+                    view = new ConsoleView(this.frame, this.tables, this.canvas,
+                                           this.database, this.tooltip, this.pie);
+                    break;
+                case 'list':
+                default:
+                    view = new ListView(this.frame, this.tables, this.canvas,
+                                        this.database, this.tooltip, this.pie);
+                    break;
+            }
+            this.views[viewType] = view;
         }
 
-        this.view.update();
+        this.views[viewType].update();
+
+        this.currentView = viewType;
 
         // unhighlight all view select buttons
         $('.viewButton').removeClass("viewButtonsel");
@@ -130,9 +145,9 @@ class ViewManager
         this.database.clear_callbacks();
         this.database.add_callback(function(event, type, obj) {
             if (event == 'removing') {
-                // remove maps immediately to avoid svg arrow animation bug
-                if (type == 'map') remove_object_svg(obj, 1); 
-                remove_object_svg(obj);
+                if (type == 'map' && obj.view)
+                    obj.view.remove();
+                remove_object_svg(obj, 0);
                 return;
             }
             switch (type) {
@@ -169,41 +184,41 @@ class ViewManager
             dev.signals.each(function(sig) {
                 this._update_signals(sig, 'added', false);
             });
-            this.view.update('devices');
+            this.views[this.currentView].update('devices');
         }
         else if (event == 'removed')
-            this.view.update('devices');
+            this.views[this.currentView].update('devices');
     }
 
     _update_signals(sig, event, repaint) {
         if (event == 'added' && !sig.view) {
             sig.position = position(null, null, this.frame);
             if (repaint)
-                this.view.update('signals');
+                this.views[this.currentView].update('signals');
         }
         else if (event == 'modified' || event == 'removed')
-            this.view.update('signals');
+            this.views[this.currentView].update('signals');
     }
 
     _update_links(link, event) {
-        this.view.update('links');
+        this.views[this.currentView].update('links');
     }
 
     _update_maps(map, event) {
         switch (event) {
             case 'added':
                 if (!map.view)
-                    this.view.update('maps');
+                    this.views[this.currentView].update('maps');
                 break;
             case 'modified':
                 if (map.view) {
                     if (map.selected)
                         $('#container').trigger("updateMapPropertiesFor", map.key);
-                    this.view.update('maps');
+                    this.views[this.currentView].update('maps');
                 }
                 break;
             case 'removed':
-                this.view.update('maps');
+                this.views[this.currentView].update('maps');
                 break;
         }
     }
@@ -211,6 +226,8 @@ class ViewManager
     _selection_handlers() {
         let self = this;
         $('#svgDiv').on('mousedown', function(e) {
+            if (self.views[self.currentView].dragging)
+                return;
             if (e.shiftKey == false) {
                 deselectAllMaps(self.tables);
             }
@@ -218,10 +235,10 @@ class ViewManager
 
             // cache current mouse position
             let svgPos = fullOffset($('#svgDiv')[0]);
-            if (self.view.type == 'grid') {
+            if (self.currentView == 'grid') {
                 // svg canvas has hidden offset
-                svgPos.left -= self.view.tables.left.expandWidth;
-                svgPos.top -= self.view.tables.right.expandWidth;
+                svgPos.left -= self.tables.left.expandWidth;
+                svgPos.top -= self.tables.right.expandWidth;
             }
             let x1 = e.pageX - svgPos.left;
             let y1 = e.pageY - svgPos.top;
@@ -231,8 +248,8 @@ class ViewManager
             self.database.maps.each(function(map) {
                 if (!map.view || map.selected)
                     return;
-                if (   edge_intersection(map.view, x1-3, y1-3, x1+3, y1+3)
-                    || edge_intersection(map.view, x1-3, y1+3, x1+3, y1-3)) {
+                if (   map.view.edge_intersection(x1-3, y1-3, x1+3, y1+3)
+                    || map.view.edge_intersection(x1-3, y1+3, x1+3, y1-3)) {
                     updated = select_obj(map);
                 }
             });
@@ -255,7 +272,7 @@ class ViewManager
                 self.database.maps.each(function(map) {
                     if (!map.view || map.selected)
                         return;
-                    if (edge_intersection(map.view, x1, y1, x2, y2)) {
+                    if (map.view.edge_intersection(x1, y1, x2, y2)) {
                         updated |= select_obj(map);
                     }
                 });
@@ -286,11 +303,12 @@ class ViewManager
                     }
                     /* delete */
                     // do not allow 'delete' key to unmap in console view
-                    if (self.view.type == 'console') break;
+                    if (self.currentView == 'console') break;
                     self.database.maps.each(function(map) {
                         if (map.selected)
                         {
-                            $('#container').trigger('unmap', [map.src.key, map.dst.key]);
+                            let srcs = map.srcs.map(s => s.key);
+                            mapper.unmap(srcs, map.dst.key);
                             self.tooltip.hide();
                         }
                     });
@@ -302,14 +320,8 @@ class ViewManager
                         select_all_maps();
                     }
                     break;
-                case 65:
-                    if (e.metaKey == true) {
-                        e.preventDefault();
-                        console.log('should add tab');
-                    }
-                    break;
                 case 27:
-                    self.view.escape();
+                    self.views[self.currentView].escape();
                     break;
             }
         });

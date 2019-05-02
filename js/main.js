@@ -1,10 +1,9 @@
 "use strict";
-var database = new MapperDatabase();
-
-var view;
+var viewManager;
 var mapProperties;
-var devFilter;
+var sigFilter;
 var saverLoader;
+var netSelector;
 var viewSelector;
 var tooltip;
 
@@ -20,35 +19,80 @@ function init() {
 
     // add the view wrapper
     $('body').append("<div id='container'></div>");
-    $('body').append("<div id='axes'></div>");
+    $('body').append("<div id='axes'>"+
+                        "<div id='fdgCtl'>"+
+                            "<div id='dampingSlider'>"+
+                                "<div id='dampingSliderHandle' class='ui-slider-handle'></div>"+
+                                "<span class='sliderTitle'>Damping:</span>"+
+                            "</div>"+
+                            "<div id='repulsionSlider'>"+
+                                "<div id='repulsionSliderHandle' class='ui-slider-handle'></div>"+
+                                "<span class='sliderTitle'>Signal repulsion:</span>"+
+                            "</div>"+
+                            "<div id='targetAttractionSlider'>"+
+                                "<div id='targetAttractionHandle' class='ui-slider-handle'></div>"+
+                                "<span class='sliderTitle'>Target attraction:</span>"+
+                            "</div>"+
+                            "<div id='devAttractionSlider'>"+
+                                "<div id='devAttractionHandle' class='ui-slider-handle'></div>"+
+                                "<span class='sliderTitle'>Device attraction:</span>"+
+                            "</div>"+
+                            "<div id='devDistanceSlider'>"+
+                                "<div id='devDistanceHandle' class='ui-slider-handle'></div>"+
+                                "<span class='sliderTitle'>Device distance:</span>"+
+                            "</div>"+
+                            "<div id='mapAttractionSlider'>"+
+                                "<div id='mapAttractionHandle' class='ui-slider-handle'></div>"+
+                                "<span class='sliderTitle'>Map attraction:</span>"+
+                            "</div>"+
+                            "<div id='mapLengthSlider'>"+
+                                "<div id='mapLengthHandle' class='ui-slider-handle'></div>"+
+                                "<span class='sliderTitle'>Map length:</span>"+
+                            "</div>"+
+                        "</div>"+
+                        "<div id='yAxis'>"+
+                            "<div id='yAxisMax'></div>"+
+                            "<div id='yAxisLabel' class='axisLabel'></div>"+
+                            "<table id='yAxisMenu' class='dropdown-content'></table>"+
+                            "<div id='yAxisMin'></div>"+
+                        "</div>"+
+                        "<div id='xAxis'>"+
+                            "<div id='xAxisMin'></div>"+
+                            "<div id='xAxisLabel' class='axisLabel'></div>"+
+                            "<table id='xAxisMenu' class='dropdown-content'></table>"+
+                            "<div id='xAxisMax'></div>"+
+                        "</div>"+
+                     "</div>");
 
     // init the view
     $('#container').empty();
     tooltip = new Tooltip();
-    view = new ViewManager(document.getElementById('container'), database, tooltip);
+    viewManager = new ViewManager(document.getElementById('container'), database,
+                                  tooltip);
 
     // init the top menu
     $('#TopMenuWrapper').empty()
-    saverLoader = new SaverLoader(document.getElementById("TopMenuWrapper"), database, view);
-    viewSelector = new ViewSelector(document.getElementById("TopMenuWrapper"), view);
-    devFilter = new SignalFilter(document.getElementById("TopMenuWrapper"), database, view);
-    mapProperties = new MapProperties(document.getElementById("TopMenuWrapper"), database, view);
+    saverLoader = new SaverLoader(document.getElementById("TopMenuWrapper"),
+                                  database, viewManager);
+    viewSelector = new ViewSelector(document.getElementById("TopMenuWrapper"),
+                                    viewManager);
+    sigFilter = new SignalFilter(document.getElementById("TopMenuWrapper"),
+                                 database, viewManager);
+    mapProperties = new MapProperties(document.getElementById("TopMenuWrapper"),
+                                      database, viewManager);
+    netSelector = new NetworkSelector(document.getElementById("TopMenuWrapper"),
+                                      database, viewManager);
 
     // init controller
     initMonitorCommands();
     initViewCommands();
     initMapPropertiesCommands();
 
-//    window.onresize = function (e) {
-//        console.log('main.on_resize()');
-//        view.on_resize();
-//    };
-
     let resizing = false;
     window.onresize = function (e) {
         if (!resizing) {
             window.requestAnimationFrame(function() {
-                view.on_resize();
+                viewManager.on_resize();
                 resizing = false;
             });
             resizing = true;
@@ -62,7 +106,7 @@ function init() {
         function() {
             switch (index) {
             case 0:
-                view.on_resize();
+                viewManager.on_resize();
                 mapProperties.clearMapProperties();
                 command.start();
                 command.send('refresh');
@@ -88,11 +132,11 @@ function init() {
 function initMonitorCommands() {
     command.register("available_networks", function(cmd, args) {
         database.networkInterfaces.available = args;
-        mapProperties.updateNetworkInterfaces(args);
+        netSelector.update();
     });
     command.register("active_network", function(cmd, args) {
         database.networkInterfaces.selected = args
-        mapProperties.updateNetworkInterfaces(args);
+        netSelector.update();
     });
 }
 
@@ -102,10 +146,34 @@ function initMonitorCommands() {
 function initViewCommands()
 {
     $('body').on('keydown.list', function(e) {
-        if (e.metaKey != true)
+        if (e.metaKey != true) {
+            switch (e.which) {
+                case 37:
+                    // pan left
+                    e.preventDefault();
+                    viewManager.pan(null, null, 10, 0);
+                    break;
+                case 39:
+                    // pan right
+                    e.preventDefault();
+                    viewManager.pan(null, null, -10, 0);
+                    break;
+                case 38:
+                    // pan up
+                    e.preventDefault();
+                    viewManager.pan(null, null, 0, 10);
+                    break;
+                case 40:
+                    // pan down
+                    e.preventDefault();
+                    viewManager.pan(null, null, 0, -10);
+                    break;
+            }
             return;
+        }
 
         let new_view = null;
+        let mp;
         switch (e.which) {
             case 49:
                 /* 1 */
@@ -143,24 +211,36 @@ function initViewCommands()
                 e.preventDefault();
                 saverLoader.fileOpenDialog();
                 break;
+            case 83:
+                e.preventDefault();
+                saverLoader.save();
             case 48:
                 e.preventDefault();
-                view.resetPanZoom();
+                viewManager.resetPanZoom();
                 break;
-//            default:
+            case 187:
+                // decrease zoom
+                e.preventDefault();
+                mp = viewManager.view.mapPane;
+                viewManager.zoom(mp.cx, mp.cy, -10);
+                break;
+            case 189:
+                // increase zoom
+                e.preventDefault();
+                mp = viewManager.view.mapPane;
+                viewManager.zoom(mp.cx, mp.cy, 10);
+                break;
+            case 70:
+                // "find": focus on signal filter
+                e.preventDefault();
+                sigFilter.activate();
+                break;
+            default:
 //                console.log('key:', e.which);
         }
         if (new_view) {
-            view.switch_view(new_view);
+            viewManager.switch_view(new_view);
         }
-    });
-
-    $('#container').on('updateView', function(e) {
-        view.draw();
-    });
-
-    $('#container').on('scrolll', function(e) {
-        view.draw(0);
     });
 
     let wheeling = false;
@@ -180,60 +260,20 @@ function initViewCommands()
         if (!wheeling) {
             window.requestAnimationFrame(function() {
                 if (zooming) {
-                    view.zoom(pageX, pageY, deltaY);
+                    viewManager.zoom(pageX, pageY, deltaY);
                 }
                 else {
-                    view.pan(pageX, pageY, deltaX, deltaY);
+                    viewManager.pan(pageX, pageY, deltaX, deltaY);
                 }
                 wheeling = false;
             });
         }
         wheeling = true;
-    });
+    }, {passive: false});
+}
 
-    // from list view
-    // requests links and maps from the selected device (tab)
-    $("#container").on("tab", function(e, tab){
-        if (tab != 'All Devices') {
-            // retrieve linked destination devices
-            database.links.each(function(link) {
-                if (tab == link.src)
-                    command.send('subscribe', link.dst);
-                else if (tab == link.dst)
-                    command.send('subscribe', link.src);
-            });
-            command.send('subscribe', tab);
-        }
-    });
-
-    // link command
-    // src = "devicename"
-    // dst = "devicename"
-    $("#container").on("link", function(e, src, dst) {
-        database.links.add({ 'src' : src, 'dst' : dst, 'num_maps': [0, 0] });
-    });
-
-    // unlink command
-    // src = "devicename"
-    // dst = "devicename"
-    $("#container").on("unlink", function(e, src, dst) {
-        database.links.remove(src, dst);
-    });
-
-    // map command
-    // src = "devicename/signalname"
-    // dst = "devicename/signalname"
-    $("#container").on("map", function(e, src, dst, args) {
-        command.send('map', [src, dst, args]);
-    });
-
-    // unmap command
-    // src = "devicename/signalname"
-    // dst = "devicename/signalname"
-    $("#container").on("unmap", function(e, src, dst) {
-        command.send('unmap', [src, dst]);
-    });
-
+// allows anyone to call updateMapProperties by triggering an event on #container
+function initMapPropertiesCommands() {
     // asks the view for the selected maps and updates the edit bar
     $("#container").on("updateMapProperties", function(e) {
         mapProperties.updateMapProperties();
@@ -243,40 +283,12 @@ function initViewCommands()
     $("#container").on("updateMapPropertiesFor", function(e, key) {
         mapProperties.updateMapPropertiesFor(key);
     });
-
-    // asks the view for the save button link (based on the active device)
-    // currently implemented in List view only
-    $("#container").on("updateSaveLocation", function(e) {
-        mapProperties.updateSaveLocation(view.get_save_location());
-    });
-
-}
-
-function initMapPropertiesCommands()
-{
-    $("#TopMenuWrapper").on("setMap", function(e, args) {
-        command.send('set_map', args);
-    });
-    $("#TopMenuWrapper").on("refreshAll", function(e) {
-        refresh_all();
-    });
-    $("#TopMenuWrapper").on("selectNetwork", function(e, network) {
-        command.send('select_network', network);
-    });
-}
-
-function refresh_all() {
-    database.clearAll();
-    command.send('refresh');
 }
 
 function select_obj(obj) {
     if (obj.selected)
         return false;
     obj.selected = true;
-    if (obj.view) {
-        obj.view.animate({'stroke': 'red', 'fill': 'red'}, 50);
-        obj.view.toFront();
-    }
+    if (obj.view instanceof MapPainter) obj.view.draw(0);
     return true;
 }

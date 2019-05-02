@@ -5,23 +5,10 @@
 'use strict';
 
 class ChordView extends View {
-    constructor(frame, tables, canvas, database, tooltip) {
-        super('chord', frame, null, canvas, database, tooltip);
+    constructor(frame, tables, canvas, database, tooltip, pie) {
+        super('chord', frame, tables, canvas, database, tooltip, pie);
 
-        // hide tables
-        tables.left.adjust(this.frame.width * -0.4, 0, this.frame.width * 0.35,
-                           frame.height, 0, 1000, null, 0, 0);
-        tables.right.adjust(frame.width, 0, 0, frame.height, 0, 1000, null, 0, 0);
-
-        this.database.devices.each(function(dev) {
-            // remove device labels (if any)
-            if (dev.view && dev.view.label)
-                dev.view.label.remove();
-            // remove associated svg elements for signals
-            dev.signals.each(function(sig) { remove_object_svg(sig); });
-        });
-        // remove associated svg elements for maps
-        this.database.maps.each(function(map) { remove_object_svg(map); });
+        this.radius = 200;
 
         this.pan = this.canvasPan;
         this.zoom = this.canvasZoom;
@@ -29,35 +16,59 @@ class ChordView extends View {
         this.onlineInc = Math.PI * 0.5;
         this.offlineInc = Math.PI * 0.5;
 
-        this.radius = Math.min(frame.width, frame.height) * 0.25;
-
         this.onlineDevs = 0;
         this.offlineDevs = 0;
 
-        this.onlineTitle = this.canvas.text(this.frame.width * 0.33, this.cy, "online devices")
+        this.file = null;
+
+        this.setup();
+    }
+
+    setup() {
+        // disable signal filter
+        $('#signalFilterDiv').addClass('disabled');
+
+        // hide tables
+        this.tables.left.adjust(this.frame.width * -0.4, 0, 0,
+                                this.frame.height, 0, 500, null, 0, 0);
+        this.tables.right.adjust(this.frame.width, 0, 0,
+                                 this.frame.height, 0, 500, null, 0, 0);
+        this.tables.left.hidden = this.tables.right.hidden = true;
+
+        let self = this;
+        this.database.devices.each(function(dev) {
+            if (dev.view) {
+                self.setDevClick(dev);
+                self.setDevHover(dev);
+            }
+            // remove associated svg elements for signals
+            dev.signals.each(function(sig) { remove_object_svg(sig); });
+        });
+        // remove associated svg elements for maps
+        this.database.maps.each(function(map) { remove_object_svg(map); });
+
+        this.onlineTitle = this.canvas.text(this.frame.width * 0.33, this.cy,
+                                            "online devices")
                                       .attr({'font-size': 32,
                                              'opacity': 1,
                                              'fill': 'white',
                                              'x': this.frame.width * 0.25,
-                                             'y': this.frame.height * 0.8});
+                                             'y': this.frame.height - 30});
         this.onlineTitle.node.setAttribute('pointer-events', 'none');
-        this.offlineTitle = this.canvas.text(this.frame.width * 0.67, this.cy, "offline devices")
+        this.offlineTitle = this.canvas.text(this.frame.width * 0.67, this.cy,
+                                             "offline devices")
                                        .attr({'font-size': 32,
                                               'opacity': 1,
                                               'fill': 'white',
                                               'x': this.frame.width * 0.75,
-                                              'y': this.frame.height * 0.8});
+                                              'y': this.frame.height - 30});
         this.offlineTitle.node.setAttribute('pointer-events', 'none');
 
-        this.file = null;
-
+        this.updateDevices();
         this.resize();
     }
 
-    resize(newFrame, duration) {
-        if (newFrame)
-            this.frame = newFrame;
-
+    _resize(duration) {
         this.mapPane.left = 0;
         this.mapPane.width = this.frame.width;
         this.mapPane.top = 0;
@@ -68,9 +79,13 @@ class ChordView extends View {
         this.radius = Math.min(this.frame.width, this.frame.height) * 0.25;
 
         this.onlineTitle.attr({'x': this.frame.width * 0.25,
-                               'y': this.frame.height * 0.8});
+                               'y': this.frame.height - 30});
         this.offlineTitle.attr({'x': this.frame.width * 0.75,
-                                'y': this.frame.height * 0.8});
+                                'y': this.frame.height - 30});
+    }
+
+    gap(numDevs) {
+        return numDevs > 1 ? 0.9 : 0.999999;
     }
 
     updateDevices() {
@@ -102,19 +117,20 @@ class ChordView extends View {
         let cy = this.mapPane.cy;
         this.database.devices.each(function(dev) {
             let offline = (dev.status == 'offline');
-            let r = self.radius;
+            let r = self.radius ? self.radius : 0;
 
             if (offline)
                 dev.index = offlineIndex++;
             else
                 dev.index = onlineIndex++;
             let angleInc = offline ? self.offlineInc : self.onlineInc;
+            let numDevs = offline ? self.offlineDevs : self.onlineDevs;
             let x = cx * (offline ? 1.5 : 0.5);
             let angle = (dev.index - 0.45) * angleInc;
             let pstart = {'angle': angle,
                           'x': x + Math.cos(angle) * r,
                           'y': cy + Math.sin(angle) * r};
-            angle += angleInc * 0.9;
+            angle += angleInc * self.gap(numDevs);
             let pstop = {'angle': angle,
                          'x': x + Math.cos(angle) * r,
                          'y': cy + Math.sin(angle) * r};
@@ -122,21 +138,70 @@ class ChordView extends View {
             if (!dev.view) {
                 let path = [['M', x, cy]];
                 dev.view = self.canvas.path().attr({'path': path,
-                                                    'stroke': dev.color,
                                                     'fill-opacity': 0,
                                                     'stroke-opacity': 0,
                                                     'stroke-linecap': 'butt',
-                                                    'stroke-width': 0,
-                                                   });
+                                                    'stroke-width': 0});
+                self.setDevClick(dev);
+                self.setDevHover(dev);
             }
             dev.view.pstart = pstart;
             dev.view.pstop = pstop;
             dev.view.radius = r;
 
-            self.setDevHover(dev);
+            if (!dev.view.label) {
+                let midAngle = dev.view.pstart.angle + angleInc * 0.45;
+                let anchor = 'start';
+                if (midAngle > Math.PI * 0.5 && midAngle < Math.PI * 1.5) {
+                    midAngle += Math.PI;
+                    anchor = 'end';
+                }
+                midAngle = Raphael.deg(midAngle);
+                dev.view.label = self.canvas.text(0, 0, dev.name);
+                dev.view.label.attr({'opacity': 0,
+                                     'pointer-events': 'none',
+                                     'font-size': 14,
+                                     'fill': 'white',
+                                     'text-anchor': anchor,
+                                     'transform': 'r'+midAngle+'0,0t,'+x+','+cy});
+                dev.view.label.node.setAttribute('pointer-events', 'none');
+            }
+
             if (offline)
                 self.setDevDrag(dev);
+        });
+    }
 
+    setDevClick(dev) {
+        let self = this;
+        dev.view.unclick().click(function(e) {
+            // check if any other devices are hidden
+            let num_hidden = self.database.devices.reduce(function(t, d) {
+                let hidden = d.hidden ? 1 : 0;
+                return t ? t + hidden : hidden;
+            });
+            if (dev.hidden) {
+                // unhide
+                dev.hidden = false;
+            }
+            else {
+                if (num_hidden === 0) {
+                    // 'solo' this device by hiding all others
+                    self.database.devices.each(function (d) {
+                        if (d !== dev)
+                            d.hidden = true;
+                    });
+                }
+                else if (num_hidden === self.database.devices.size() - 1) {
+                    // unhide all devices
+                    self.database.devices.each(function (d) {
+                        d.hidden = false;
+                    });
+                }
+                else
+                    dev.hidden = true;
+            }
+            self.draw(0);
         });
     }
 
@@ -148,7 +213,7 @@ class ChordView extends View {
         let cx = self.mapPane.cx;
         let cy = self.mapPane.cy;
         let lastAngle = null;
-        let r, cx2, angleInc, angle;
+        let r, cx2, angleInc, angle, numDevs;
         dev.view.mouseup(function() {
             if (self.draggingFrom && self.snappingTo) {
                 dev.staged = self.snappingTo;
@@ -164,7 +229,7 @@ class ChordView extends View {
                 dev.view.pstart = {'angle': angle,
                                    'x': cx2 + Math.cos(angle) * r,
                                    'y': cy + Math.sin(angle) * r};
-                angle += angleInc * 0.9;
+                angle += angleInc * self.gap(self.offlineDevs);
                 dev.view.pstop = {'angle': angle,
                                   'x': cx2 + Math.cos(angle) * r,
                                   'y': cy + Math.sin(angle) * r};
@@ -190,6 +255,7 @@ class ChordView extends View {
                     r = self.radius;
                     cx2 = cx * 1.5;
                     angleInc = self.offlineInc;
+                    numDevs = self.offlineDevs;
                     angle = (dev.index - 0.45) * angleInc;
                     self.snappingTo = null;
                 }
@@ -198,6 +264,7 @@ class ChordView extends View {
                     r = self.radius + (self.snappingTo ? 40 : 50);
                     cx2 = cx * 0.5;
                     angleInc = self.onlineInc;
+                    numDevs = self.onlineDevs;
                     angle = Math.atan2(y - cy, x - cx2);
                     angle = (Math.round(angle / angleInc) - 0.45) * angleInc;
                 }
@@ -207,7 +274,7 @@ class ChordView extends View {
                 dev.view.pstart = {'angle': angle,
                                    'x': cx2 + Math.cos(angle) * r,
                                    'y': cy + Math.sin(angle) * r};
-                angle += angleInc * 0.9;
+                angle += angleInc * self.gap(numDevs);
                 dev.view.pstop = {'angle': angle,
                                   'x': cx2 + Math.cos(angle) * r,
                                   'y': cy + Math.sin(angle) * r};
@@ -238,30 +305,68 @@ class ChordView extends View {
         if (!dev.view)
             return;
         dev.view.stop();
-        let staged = false;
-        let r = dev.view.radius;
-        let angleInc;
-        if (dev.status == 'offline') {
-            if (dev.draggingFrom)
+        dev.view.label.stop();
+        let offline = (dev.status == 'offline');
+        let angleInc, numDevs;
+        if (offline == 'offline') {
+            if (dev.draggingFrom) {
                 angleInc = self.onlineInc;
-            else
+                numDevs = self.onlineDevs;
+            }
+            else {
                 angleInc = self.offlineInc;
+                numDevs = self.offlineDevs;
+            }
         }
         else {
             angleInc = self.onlineInc;
+            numDevs = self.onlineDevs;
         }
 
-        dev.view.path = [['M', dev.view.pstart.x, dev.view.pstart.y],
+        let r = self.radius ? self.radius : 0;
+        let cx = self.mapPane.cx;
+        let cy = self.mapPane.cy;
+        let x = cx * (offline ? 1.5 : 0.5);
+        let angle = (dev.index - 0.45) * angleInc;
+        let pstart = {'angle': angle,
+                      'x': x + Math.cos(angle) * r,
+                      'y': cy + Math.sin(angle) * r};
+        angle += angleInc * self.gap(numDevs);
+        let pstop = {'angle': angle,
+                     'x': x + Math.cos(angle) * r,
+                     'y': cy + Math.sin(angle) * r};
+
+        dev.view.path = [['M', pstart.x, pstart.y],
                          ['A', r, r, angleInc,
                           fuzzyEq(angleInc, 6.283, 0.01) ? 1 : 0, 1,
-                          dev.view.pstop.x, dev.view.pstop.y]];
+                          pstop.x, pstop.y]];
+        let color = Raphael.hsl(dev.hue, dev.hidden ? 0 : 1, 0.5);
         dev.view.attr({'stroke-linecap': 'butt'})
                 .animate({'path': dev.view.path,
+                          'stroke': color,
                           'fill-opacity': 0,
                           'stroke-opacity': 1,
                           'stroke-width': 40,
                           'transform': 't0,0r0'
                          }, duration, '>');
+
+        let midAngle = dev.view.pstart.angle + angleInc * 0.45;
+        x = this.mapPane.cx * (dev.status == 'offline' ? 1.5 : 0.5);
+        let y = this.mapPane.cy;
+        if (midAngle > Math.PI * 0.5 && midAngle < Math.PI * 1.5) {
+            dev.view.label.attr({'text-anchor': 'end'})
+                          .animate({'opacity': dev.hidden ? 0.5 : 1.0,
+                                    'transform': 'r180,'+x+','+y+'t'+x+','+y+'r'+Raphael.deg(midAngle)+',0,0t'+(-r-20)+',-5'
+                                   }, duration, '>');
+        }
+        else {
+            dev.view.label.attr({'text-anchor': 'start'})
+                          .animate({'opacity': dev.hidden ? 0.5 : 1.0,
+                                    'transform': 't'+x+','+y+'r'+Raphael.deg(midAngle)+',0,0t'+(r+20)+',-5'
+                                   }, duration, '>');
+        }
+        if (midAngle > 3.14)
+            dev.view.label.attr({});
     }
 
     drawDevices(duration) {
@@ -317,7 +422,7 @@ class ChordView extends View {
             let src = link.src;
             let dst = link.dst;
             if (!link.view) {
-                let r = self.radius;
+                let r = self.radius ? self.radius : 0;
                 let angleInc;
                 if (src.status == 'offline') {
                     if (src.draggingFrom) {
@@ -376,12 +481,10 @@ class ChordView extends View {
             if (src == self.draggingFrom) {
                 r += self.snappingTo ? 40 : 50;
             }
-//            cx = self.mapPane.cx * (offline ? 1.5 : 0.5);
             angleInc = offline ? self.offlineInc : self.onlineInc;
         }
         cx = self.mapPane.cx * (src.view.pstart.x < self.mapPane.cx ? 0.5 : 1.5);
 
-        // we will be inserting spaces between links equal to (arclength * 0.1)
         let srcAngleInc = angleInc / src.link_angles.length * 0.9;
         let srcStartAngle = src.view.pstart.angle;
         let srcStopAngle;
@@ -442,14 +545,9 @@ class ChordView extends View {
         if (midAngleDeg < 0)
             midAngleDeg += 360;
 
-        let rgb = Raphael.getRGB(link.src.color);
-        let srcColor = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.75)';
-        rgb = Raphael.getRGB(link.dst.color);
-        let dstColor = 'rgba(' + rgb.r + ',' + rgb.g + ',' + rgb.b + ',0.75)';
+        let srcColor = 'hsla(' + src.hue + ','+(src.hidden ? 0 : 1)+',0.5,0.75)';
+        let dstColor = 'hsla(' + dst.hue + ','+(dst.hidden ? 0 : 1)+',0.5,0.75)';
         let fillString = midAngleDeg+'-'+srcColor+'-'+dstColor;
-
-//        if (self.draggingFrom)
-//            cx = self.mapPane.cx;
 
         let path = [];
         if (src == dst) {
@@ -476,11 +574,22 @@ class ChordView extends View {
             }
         }
         else {
+            let cx1 = cx, cy1 = cy;
+            angleInc *= 0.1;
+            if (fuzzyEq(Math.abs(polarDiff(srcStopAngle, dstStartAngle)), angleInc, 0.1)) {
+                cx = cx * 0.5 + (srcStopPos[0] + dstStartPos[0]) * 0.25;
+                cy = cy * 0.5 + (srcStopPos[1] + dstStartPos[1]) * 0.25;
+            }
+            else if (fuzzyEq(Math.abs(polarDiff(srcStartAngle, dstStopAngle)), angleInc, 0.1)) {
+                cx1 = cx * 0.5 + (srcStartPos[0] + dstStopPos[0]) * 0.25;
+                cy1 = cy * 0.5 + (srcStartPos[1] + dstStopPos[1]) * 0.25;
+            }
+
             path.push(['M', srcStartPos[0], srcStartPos[1]],
                       ['A', r, r, srcStopAngle - srcStartAngle, 0, 1, srcStopPos[0], srcStopPos[1]]);
             path.push(['Q', cx, cy, dstStartPos[0], dstStartPos[1]]);
             path.push(['A', r, r, dstStopAngle - dstStartAngle, 0, 1, dstStopPos[0], dstStopPos[1]]);
-            path.push(['Q', cx, cy, srcStartPos[0], srcStartPos[1]]);
+            path.push(['Q', cx1, cy1, srcStartPos[0], srcStartPos[1]]);
             path.push(['Z']);
         }
 
@@ -511,16 +620,21 @@ class ChordView extends View {
                 elements = arguments;
                 break;
         }
+        let updated = false;
         if (elements.indexOf('devices') >= 0) {
             this.updateDevices();
             if (this.onlineTitle)
-                this.onlineTitle.attr({'text': this.onlineDevs+' online devices'});
+                this.onlineTitle.attr({'text': this.onlineDevs+' online devices (click to hide/unhide)'});
             if (this.offlineTitle)
                 this.offlineTitle.attr({'text': this.offlineDevs+' offline devices'});
+            updated = true;
         }
-        if (elements.indexOf('links') >= 0)
+        if (elements.indexOf('links') >= 0) {
             this.updateLinks();
-        this.draw(1000);
+            updated = true;
+        }
+        if (updated)
+            this.draw(500);
     }
 
     draw(duration) {
@@ -539,6 +653,14 @@ class ChordView extends View {
                 return;
             remove_object_svg(link, 200);
         });
+        database.devices.each(function(dev) {
+            if (!dev.view)
+                return;
+            dev.view.unclick();
+            dev.view.unhover();
+        });
+
+        $('#signalFilterDiv').removeClass('disabled');
 
         // clean up any objects created only for this view
     }

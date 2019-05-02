@@ -10,42 +10,24 @@
 // type() // returns view type
 
 class View {
-    constructor(type, frame, tables, canvas, database, tooltip) {
+    constructor(type, frame, tables, canvas, database, tooltip, pie, painter) {
         this.type = type;
         this.frame = frame;
         this.tables = tables,
         this.canvas = canvas;
         this.database = database;
         this.tooltip = tooltip;
-
-        this.srcregexp = null;
-        this.dstregexp = null;
+        this.pie = pie;
 
         this.hoverDev = null;
         this.draggingFrom = null;
         this.snappingTo = null;
         this.escaped = false;
 
+        this.animationTime = 500;
+
         this.newMap = null;
-
-        this.dragObj = 'map';
-
-        // normalized table positions & dimensions
-        this.leftTableLeft = 0;
-        this.leftTableTop = 0;
-        this.leftTableWidth = 0;
-        this.leftTableHeight = 1;
-        this.leftTableAngle = 0;
-
-        this.rightTableLeft = 1;
-        this.rightTableTop = 0;
-        this.rightTableWidth = 0;
-        this.rightTableHeight = 1;
-        this.rightTableAngle = 0;
-
-        if (tables) {
-            this.setTableDrag();
-        }
+        this.converging = null;
 
         this.mapPane = {'left': frame.left,
                         'top': frame.top,
@@ -55,9 +37,8 @@ class View {
                         'cy': this.frame.height * 0.5
         };
 
-        this.svgZoom = 1;
-        this.svgPosX = 0;
-        this.svgPosY = 0;
+        this.canvas.zoom = 1;
+        this.canvas.pan = {x: 0, y: 0};
 
         this.xAxis = null;
         this.yAxis = null;
@@ -68,20 +49,21 @@ class View {
         this.origin = [this.mapPane.cx, this.mapPane.cy];
 
         this.sigLabel = null;
-
-        // default to arrowheads on maps
-        this.database.maps.each(function(map) {
-            if (map.view)
-                map.view.attr({'arrow-end': 'block-wide-long'});
-        });
-
-        this.update();
     }
 
-    resize(newFrame) {
+    // Subclasses should override the behavior of _resize rather than this one
+    resize(newFrame, duration) {
+        if (duration === undefined)
+            duration = this.animationTime;
         if (newFrame)
             this.frame = newFrame;
+        this._resize(duration);
+        this.canvas.setViewBox(0, 0, this.frame.width, this.frame.height, false);
+        this.draw(duration);
+    }
 
+    // Define subclass specific resizing related tasks
+    _resize() {
         this.mapPane = {'left': this.frame.left,
                         'top': this.frame.top,
                         'width': this.frame.width,
@@ -90,13 +72,13 @@ class View {
                         'cy': this.frame.height * 0.5};
 
         this.origin = [this.mapPane.cx, this.mapPane.cy];
-
-        this.draw(0);
     }
 
     updateDevices(func) {
-        for (var i in this.tables)
-            this.tables[i].update();
+        for (var i in this.tables) {
+            if (!this.tables[i].hidden)
+                this.tables[i].update();
+        }
 
         let self = this;
         let devIndex = 0;
@@ -104,29 +86,28 @@ class View {
             // update device signals
             let sigIndex = 0;
             dev.signals.each(function(sig) {
-                let regexp = sig.direction == 'output' ? self.srcregexp : self.dstregexp;
-                if (regexp && !regexp.test(sig.key)) {
-                    remove_object_svg(sig);
+                sig.hidden = (dev.hidden == true);
+                let re = sig.direction == 'output' ? self.database.srcRE : self.database.dstRE;
+                if (dev.hidden || (re && !re.test(sig.key))) {
+                    if (sig.view)
+                        sig.view.hide();
                     sig.index = null;
                     return;
                 }
                 sig.index = sigIndex++;
 
-                if (self.tables) {
-                    remove_object_svg(sig);
+                if (!sig.view) {
+                    sig.view = self.canvas.path(circle_path(0, self.frame.height, 0))
+                                          .attr({'fill-opacity': 0,
+                                                 'stroke-opacity': 0});
+                    self.setSigDrag(sig);
+                    self.setSigHover(sig);
                 }
-                else {
-                    if (!sig.view) {
-                        sig.view = self.canvas.path(circle_path(0, self.frame.height, 0))
-                                              .attr({'fill-opacity': 0,
-                                                     'stroke-opacity': 0});
-                        self.setSigDrag(sig);
-                        self.setSigHover(sig);
-                    }
-                }
+                else
+                    sig.view.show();
             });
             // if no signals visible, hide device also
-            if (!sigIndex) {
+            if (dev.hidden || !sigIndex) {
                 remove_object_svg(dev);
                 dev.index = null;
                 return;
@@ -134,9 +115,6 @@ class View {
 
             dev.index = devIndex++;
             dev.numVisibleSigs = sigIndex + 1;
-            if (self.tables) {
-                remove_object_svg(dev);
-            }
 
             if (func && func(dev)) {
                 remove_object_svg(dev);
@@ -146,19 +124,13 @@ class View {
             if (!dev.view) {
                 let path = [['M', self.frame.left + 50, self.frame.height - 50],
                             ['l', 0, 0]];
+                let color = Raphael.hsl(dev.hue, 1, 0.5);
                 dev.view = self.canvas.path().attr({'path': path,
-                                                    'fill': dev.color,
-                                                    'stroke': dev.color,
+                                                    'fill': color,
+                                                    'stroke': color,
                                                     'fill-opacity': 0,
                                                     'stroke-opacity': 0,
-                                                    'stroke-linecap': 'round'
-                                                   });
-                dev.view.click(function(e) {
-                    dev.collapsed ^= 3;
-                    // TODO: hide signals
-                    self.updateDevices();
-                    self.draw(0);
-                });
+                                                    'stroke-linecap': 'round'});
             }
         });
     }
@@ -174,7 +146,7 @@ class View {
         dev.view.unhover();
         dev.view.hover(
             function(e) {
-                if (!hovered && !dev.view.label) {
+                if (!hovered) {
                     self.tooltip.showTable(
                         dev.status+" device", {
                             name: dev.name,
@@ -189,6 +161,8 @@ class View {
                         dev.view.toFront();
                     }
                     dev.view.animate({'stroke-width': 50}, 0, 'linear');
+                    if (dev.view.label)
+                        dev.view.label.toFront();
                 }
                 hovered = true;
                 self.hoverDev = dev;
@@ -224,9 +198,13 @@ class View {
                     }, e.x, e.y);
                 link.view.toFront().animate({'stroke-width': 1}, 0, 'linear');
                 link.src.view.toFront();
+                if (link.src.view.label)
+                    link.src.view.label.toFront();
                 if (link.src.staged)
                     link.src.staged.view.toFront();
                 link.dst.view.toFront();
+                if (link.dst.view.label)
+                    link.dst.view.label.toFront();
                 if (link.dst.staged)
                     link.dst.staged.view.toFront();
             },
@@ -257,11 +235,9 @@ class View {
             if (link.view)
                 return;
             link.view = self.canvas.path();
-            let rgb = Raphael.getRGB(src.color);
             let gradient = [];
-            gradient[0] = '0-rgba('+rgb.r+','+rgb.g+','+rgb.b+',';
-            rgb = Raphael.getRGB(dst.color);
-            gradient[1] = ')-rgba('+rgb.r+','+rgb.g+','+rgb.b+',';
+            gradient[0] = '0-hsla('+src.hue+',1,0.5,';
+            gradient[1] = ')-hsla('+dst.hue+',1,0.5,';
 
             link.view.attr({'fill': gradient[0]+0.25+gradient[1]+0.25+')',
                             'stroke-opacity': 0});
@@ -297,8 +273,30 @@ class View {
                             break;
                     }
                     let typestring = sig.length > 1 ? type+'['+sig.length+']' : type;
-                    let minstring = sig.min != null ? sig.min : '';
-                    let maxstring = sig.max != null ? sig.max : '';
+                    function parseMaybeVector(val) {
+                        if (val === null || typeof val === 'undefined')
+                            return '';
+                        if (Array.isArray(val)) {
+                            // check if values are uniform
+                            for (let i = 1; i < val.length; i++) {
+                                if (val[i] != val[0])
+                                    return val;
+                            }
+                            return val[0];
+                        }
+                        return val;
+                    }
+                    let minstring = parseMaybeVector(sig.min);
+                    let maxstring = parseMaybeVector(sig.max);
+                    let x, y;
+                    if (Array.isArray(sig.position)) {
+                       x = sig.position[0].x;
+                       y = sig.position[0].y;
+                    }
+                    else {
+                       x = sig.position.x;
+                       y = sig.position.y;
+                    }
                     self.tooltip.showTable(
                         sig.device.status+" signal", {
                             name: sig.key,
@@ -307,7 +305,7 @@ class View {
                             unit: sig.unit,
                             minimum: minstring,
                             maximum: maxstring,
-                        }, sig.position.x, sig.position.y);
+                        }, x, y);
                     sig.view.animate({'stroke-width': 15}, 0, 'linear');
                 }
                 self.hoverDev = sig.device;
@@ -318,14 +316,8 @@ class View {
                     return;
                 }
                 self.snappingTo = sig;
-                let src = self.draggingFrom.position;
-                let dst = sig.position;
-                let path = [['M', src.x, src.y],
-                            ['S', (src.x + dst.x) * 0.6, (src.y + dst.y) * 0.4,
-                             dst.x, dst.y]];
-                let len = Raphael.getTotalLength(path);
-                path = Raphael.getSubpath(path, 12, len - 12);
-                self.newMap.attr({'path': path});
+                self.newMap.dst = sig;
+                self.newMap.view.draw(0);
             },
             function() {
                 self.snappingTo = null;
@@ -338,11 +330,22 @@ class View {
 
     setSigDrag(sig) {
         let self = this;
-        sig.view.mouseup(function() {
-            if (self.draggingFrom && self.snappingTo)
-                $('#container').trigger('map', [self.draggingFrom.key,
-                                                self.snappingTo.key]);
-        });
+
+        function finish(convergent_method) {
+            if (!self.escaped && self.draggingFrom && self.converging && convergent_method)
+                mapper.converge(self.draggingFrom.key, self.converging, convergent_method);
+            else if (self.draggingFrom && self.snappingTo)
+                mapper.map(self.draggingFrom.key, self.snappingTo.key);
+            self._unsnap_to_map();
+            self.draggingFrom = null;
+            if (self.newMap) {
+                self.newMap.view.remove();
+                self.newMap = null;
+            }
+            self.pie.hide();
+        }
+
+        let upx, upy;
         sig.view.undrag();
         sig.view.drag(
             function(dx, dy, x, y, event) {
@@ -351,35 +354,52 @@ class View {
                 if (self.escaped) {
                     return;
                 }
-                x -= self.frame.left;
+                //x -= self.frame.left;
                 y -= self.frame.top;
-                let src = self.draggingFrom.position;
-                let path = [['M', src.x, src.y],
-                            ['S', (src.x + x) * 0.6, (src.y + y) * 0.4, x, y]];
+                upx = x; upy = y;
                 if (!self.newMap) {
-                    self.newMap = self.canvas.path(path);
-                    self.newMap.attr({'stroke': 'white',
-                                      'stroke-width': MapPath.strokeWidth,
-                                      'stroke-opacity': 1,
-                                      'fill': 'none',
-                                      'arrow-start': 'none',
-                                      'arrow-end': 'block-wide-long'});
+                    self.newMap =
+                        {
+                            'srcs': [sig],
+                            'dst': {'position': {'x': x, 'y': y}, 'device': {'hidden' : false}, 'view': {}},
+                            'selected': true,
+                            'hidden': false
+                        };
+                    self.newMap.view = new self.mapPainter(self.newMap, self.canvas, self.frame, self.database);
                 }
-                else
-                    self.newMap.attr({'path': path});
+                else {
+                    if (!self.snapping_to_map()) {
+                        let snapped = self._get_map_snap(x-dx, y-dy, x, y);
+                        if (snapped !== null) self._snap_to_map(snapped);
+                    }
+                    if (!self._continue_map_snap(x, y))
+                    {
+                        self._unsnap_to_map();
+                        self.newMap.dst.position = {'x': x, 'y': y};
+                    }
+                }
+                self.newMap.view.draw(0);
             },
             function(x, y, event) {
                 self.escaped = false;
                 self.draggingFrom = sig;
             },
             function(x, y, event) {
-                self.draggingFrom = null;
-                if (self.newMap) {
-                    self.newMap.remove();
-                    self.newMap = null;
-                }
+                if (self.snapping_to_map()) self._start_converging_pie_menu(upx, upy, finish);
+                else finish();
             }
         );
+    }
+
+    setAllSigHandlers() {
+        let self = this;
+        this.database.devices.each(dev => 
+            dev.signals.each(sig => {
+                if (!sig.view) return;
+                self.setSigHover(sig);
+                self.setSigDrag(sig);
+            })
+        );;
     }
 
     updateSignals(func) {
@@ -390,28 +410,30 @@ class View {
                     sig.view.stop();
 
                 // check regexp
-                let regexp = (sig.direction == 'output'
-                              ? self.srcregexp : self.dstregexp);
-                if (regexp && !regexp.test(sig.key)) {
-                    remove_object_svg(sig);
+                let re = (sig.direction == 'output'
+                          ? self.database.srcRE : self.database.dstRE);
+                if (sig.hidden || (re && !re.test(sig.key))) {
+                    if (sig.view)
+                        sig.view.hide();
                     sig.index = null;
                     sig.position = null;
                     return;
                 }
 
                 if (func && func(sig)) {
-                    remove_object_svg(sig);
+                    if (sig.view)
+                        sig.view.hide();
                     return;
                 }
 
                 if (!sig.view && sig.position) {
-                    let path = circle_path(sig.position.x, sig.position.y, 10);
-                    sig.view = self.canvas.path(path)
+                    sig.view = self.canvas.path()
                                           .attr({stroke_opacity: 0,
                                                  fill_opacity: 0});
                     self.setSigDrag(sig);
                     self.setSigHover(sig);
                 }
+                sig.view.show();
             });
         });
     }
@@ -424,17 +446,21 @@ class View {
         let is_output = sig.direction == 'output';
 
         let path = circle_path(pos.x, pos.y, 10);
+        let color = Raphael.hsl(sig.device.hue, 1, 0.5);
         sig.view.animate({'path': path,
-                          'fill': is_output ? 'black' : sig.device.color,
+                          'fill': is_output ? 'black' : color,
                           'fill-opacity': 1,
-                          'stroke': sig.device.color,
+                          'stroke': color,
                           'stroke-width': 6,
                           'stroke-opacity': 1}, duration, '>');
+        if (sig.hidden) sig.view.hide();
     }
 
     drawSignals(duration) {
         let self = this;
         this.database.devices.each(function(dev) {
+            if (dev.hidden)
+                return;
             dev.signals.each(function(sig) {
                 self.drawSignal(sig, duration);
             });
@@ -449,34 +475,18 @@ class View {
                 if (!self.draggingFrom) {
                     self.tooltip.showTable(
                         "Map", {
-                            source: map.src.key,
+                            source: map.srcs.map(s => s.key).join(', '),
                             destination: map.dst.key,
                             mode: map.mode,
                             expression: map.expression,
                         }, e.x, e.y);
                 }
-                map.view.animate({'stroke-width': MapPath.boldStrokeWidth}, 0, 'linear');
-
-//                if (self.draggingFrom == null)
-//                    return;
-//                else if (map == self.draggingFrom) {
-//                    // don't snap to self
-//                    return;
-//                }
-//                self.snappingTo = map;
-//                let src = self.draggingFrom.position;
-//                let dst = sig.position;
-//                let path = [['M', src.x, src.y],
-//                            ['S', (src.x + dst.x) * 0.6, (src.y + dst.y) * 0.4,
-//                             dst.x, dst.y]];
-//                let len = Raphael.getTotalLength(path);
-//                path = Raphael.getSubpath(path, 10, len - 10);
-//                self.newMap.attr({'path': path});
+                map.view.highlight();
             },
             function() {
                 self.snappingTo = null;
                 self.tooltip.hide();
-                map.view.animate({'stroke-width': MapPath.strokeWidth}, 50, 'linear');
+                map.view.unhighlight();
             }
         );
     }
@@ -484,157 +494,28 @@ class View {
     updateMaps() {
         let self = this;
         this.database.maps.each(function(map) {
-            // todo: check if signals are visible
+            map.hidden = map.srcs.some(s => s.hidden) || map.dst.hidden;
+            if (map.hidden) {
+                remove_object_svg(map);
+                return;
+            }
             if (!map.view) {
-                let pos = map.src.position;
-                let path = pos ? [['M', pos.x, pos.y], ['l', 10, 0]] : null;
-                map.view = self.canvas.path(path);
-                map.view.attr({'stroke-dasharray': map.muted ? '-' : '',
-                               'stroke': map.selected ? 'red' : 'white',
-                               'fill': 'none',
-                               'stroke-width': MapPath.strokeWidth,
-                               'arrow-start': 'none'});
-                map.view.new = true;
+                map.view = new self.mapPainter(map, self.canvas, self.frame, self.database);
                 self.setMapHover(map);
             }
         });
     }
 
-    _tableRow(sig) {
-        let row = null;
-        for (var i in this.tables) {
-            row = this.tables[i].getRowFromName(sig.key);
-            if (row)
-                break;
-        }
-        return row;
-    }
-
-    getMapPath(map) {
-        if (this.tables) return this._getMapPathForTables(map);
-        else return this._getMapPathForSigNodes(map);
-    }
-
-    _getMapPathForTables(map) {
-        let src = this._tableRow(map.src);
-        let dst = this._tableRow(map.dst);
-        if (!src || !dst)
-            return null;
-        if (src.vx == dst.vx) {
-            // same table
-            if (map.view) map.view.attr({'arrow-end': 'block-wide-long'});
-            return MapPath.sameTable(src, dst, this.mapPane);
-        }
-        else if (src.vy != dst.vy) {
-            // constrain positions to pane to indicate offscreen maps
-            // todo: make function
-            if (src.x < this.leftTableLeft) {
-                // constrain to bounds
-                // display a white dot
-            }
-            // draw intersection between tables
-            if (map.view) map.view.attr({'arrow-end': 'none'});
-            if (src.vx < 0.0001) {
-                return [['M', src.left + 2, dst.y],
-                        ['L', src.left + src.width - 2, dst.top + 2],
-                        ['l', 0, dst.height - 2],
-                        ['Z']];
-            }
-            else {
-                return [['M', dst.x, src.top + 2],
-                        ['L', dst.left + 2, src.top + src.height - 2],
-                        ['l', dst.width - 2, 0],
-                        ['Z']]
-            }
-        }
-        else {
-            // draw bezier curve between signal tables
-            if (map.view) map.view.attr({'arrow-end': 'block-wide-long'});
-            return MapPath.betweenTables(src, dst);
-        }
-    }
-
-    _getMapPathForSigNodes(map) {
-        let src = map.src.position
-        let dst = map.dst.position;
-        if (!src || !dst)
-            return null;
-
-        // calculate midpoint
-        let mpx = (src.x + dst.x) * 0.5;
-        let mpy = (src.y + dst.y) * 0.5;
-
-        // inflate midpoint around origin to create a curve
-        mpx = mpx + (mpx - this.origin[0]) * 0.2;
-        mpy = mpy + (mpy - this.origin[1]) * 0.2;
-
-        return [['M', src.x, src.y],
-                ['S', mpx, mpy, dst.x, dst.y]];
-    }
-
-    drawMaps(duration) {
-        let self = this;
+    drawMaps(duration, signal) {
         this.database.maps.each(function(map) {
             if (!map.view)
                 return;
-            if (map.hidden) {
-                map.view.hide();
+            if (signal && map.srcs.every(s => s != signal) && map.dst != signal)
                 return;
-            }
-            map.view.stop();
-
-            let path = self.getMapPath(map);
-            if (self.shortenPaths) {
-                // shorten path so it doesn't draw over signals
-                let len = Raphael.getTotalLength(path);
-                path = Raphael.getSubpath(path, self.shortenPaths,
-                                          len - self.shortenPaths);
-            }
-
-            if (!path) {
-                map.view.hide();
-                return;
-            }
-            let fill_opacity = (self.type == 'grid' && path.length > 3) ? 1.0 : 0.0;
-            let stroke_color = map.selected ? 'red' : 'white';
-            let fill_color = fill_opacity > 0.5 ? stroke_color : 'none';
-
-            if (map.view.new) {
-                map.view.show();
-                map.view.new = false;
-                if (map.status == "staged") {
-                    // draw map directly
-                    map.view.attr({'path': path,
-                                   'stroke-opacity': 0.5,
-                                   'stroke': stroke_color,
-                                   'stroke-dasharray': map.muted ? '-' : '',
-                                   'fill-opacity': fill_opacity,
-                                   'fill': fill_color,
-                                   'arrow-end': 'block-wide-long'
-                                  })
-                            .toFront();
-                    return;
-                }
-                // draw animation following arrow path
-                let len = Raphael.getTotalLength(path);
-                let path_mid = Raphael.getSubpath(path, 0, len * 0.5);
-                map.view.animate({'path': path_mid,
-                                  'stroke-opacity': 1.0},
-                                 duration * 0.5, '>')
-                        .toFront();
-            }
-            else {
-                map.view.show();
-                map.view.animate({'path': path,
-                                  'stroke-opacity': 1.0,
-                                  'fill-opacity': fill_opacity,
-                                  'fill': fill_color,
-                                  'stroke-width': MapPath.strokeWidth,
-                                  'stroke': stroke_color},
-                                 duration, '>')
-                        .toFront();
-            }
+            else map.view.draw(duration);
         });
+        if (this.newMap)
+            this.newMap.view.draw(0);
     }
 
     update() {
@@ -656,22 +537,20 @@ class View {
             for (index in this.tables)
                 updated |= this.tables[index].pan(delta_x, delta_y);
         }
-        if (updated)
-            this.draw(0);
+        return updated;
     }
 
     canvasPan(x, y, delta_x, delta_y) {
         x -= this.frame.left;
         y -= this.frame.top;
-        this.svgPosX += delta_x * this.svgZoom;
-        this.svgPosY += delta_y * this.svgZoom;
+        this.canvas.pan.x += delta_x * this.canvas.zoom;
+        this.canvas.pan.y += delta_y * this.canvas.zoom;
 
-        this.canvas.setViewBox(this.svgPosX, this.svgPosY,
-                               this.frame.width * this.svgZoom,
-                               this.frame.height * this.svgZoom, false);
-        this.tooltip.showBrief(
-            'pan: ['+this.svgPosX.toFixed(2)+', '+this.svgPosY.toFixed(2)+']', 
-            x, y);
+        this.canvas.setViewBox(this.canvas.pan.x, this.canvas.pan.y,
+                               this.frame.width * this.canvas.zoom,
+                               this.frame.height * this.canvas.zoom, false);
+        this.tooltip.showBrief('pan: ['+this.canvas.pan.x.toFixed(2)+', '
+                               +this.canvas.pan.y.toFixed(2)+']', x, y);
     }
 
     tableZoom(x, y, delta) {
@@ -688,58 +567,64 @@ class View {
             for (index in this.tables)
                 updated |= this.tables[index].zoom(delta, x, y, false);
         }
-        if (updated)
-            this.draw(0);
+        return updated;
     }
 
     canvasZoom(x, y, delta) {
         x -= this.frame.left;
         y -= this.frame.top;
-        let newZoom = this.svgZoom + delta * 0.01;
+        let newZoom = this.canvas.zoom + delta * 0.01;
         if (newZoom < 0.1)
             newZoom = 0.1;
         else if (newZoom > 20)
             newZoom = 20;
-        if (newZoom == this.svgZoom)
+        if (newZoom == this.canvas.zoom)
             return;
-        let zoomDiff = this.svgZoom - newZoom;
-        this.svgPosX += x * zoomDiff;
-        this.svgPosY += (y - this.frame.top) * zoomDiff;
-        this.canvas.setViewBox(this.svgPosX, this.svgPosY,
+        let zoomDiff = this.canvas.zoom - newZoom;
+        this.canvas.pan.x += x * zoomDiff;
+        this.canvas.pan.y += (y - this.frame.top) * zoomDiff;
+        this.canvas.setViewBox(this.canvas.pan.x, this.canvas.pan.y,
                                this.frame.width * newZoom,
                                this.frame.height * newZoom, false);
         this.tooltip.showBrief( 'zoom: '+(100/newZoom).toFixed(2)+'%', x, y);
-        this.svgZoom = newZoom;
+        this.canvas.zoom = newZoom;
     }
 
     resetPanZoom() {
         this.canvas.setViewBox(0, 0, this.frame.width, this.frame.height, false);
-        this.svgZoom = 1;
-        this.svgPosX = 0;
-        this.svgPosY = 0;
+        this.canvas.zoom = 1;
+        this.canvas.pan.x = 0;
+        this.canvas.pan.y = 0;
     }
 
-    filterSignals(direction, text) {
+    filterSignals(direction) {
         direction = direction == 'src' ? 'output' : 'input';
         let index, updated = false;
-        if (this.tables) {
-            for (index in this.tables) {
-                let table = this.tables[index];
-                if (!table.direction || table.direction == direction)
-                    updated |= table.filterByName(text);
-            }
-            if (updated) {
-                this.update('signals');
+        switch (this.type) {
+            case 'list':
+            case 'grid':
+                for (index in this.tables) {
+                    let table = this.tables[index];
+                    if (!table.direction || table.direction == direction)
+                        updated |= table.filterByName();
+                }
+                if (updated) {
+                    this.draw(0);
+                }
+                break;
+            case 'canvas':
+                // TODO: need to filter canvas objects also
+                this.tables.left.filterByName();
                 this.draw(0);
-            }
-        }
-        else {
-            if (direction == 'output')
-                this.srcregexp = text ? new RegExp(text, 'i') : null;
-            else
-                this.dstregexp = text ? new RegExp(text, 'i') : null;
-            this.update('signals');
-            this.draw(0);
+                break;
+            case 'graph':
+            case 'hive':
+            case 'parallel':
+                this.update('signals');
+                this.draw();
+                break;
+            default:
+                break;
         }
     }
 
@@ -747,7 +632,7 @@ class View {
         this.escaped = true;
         this.draggingFrom = null;
         if (this.newMap) {
-            this.newMap.remove();
+            if (this.newMap.view) this.newMap.view.remove();
             this.newMap = null;
         }
         if (this.tables) {
@@ -758,16 +643,19 @@ class View {
 
     setTableDrag() {
         let self = this;
-        // dragging maps from table
-        // if another table exists, we can drag between them
-        // can also drag map to self
-        // if tables are orthogonal we can simply drag to 2D space between them
-        // if no other table exists, can drag out signal representation
+        // dragging from table to table to make maps
+        // the signal associated with the row where the dragging starts becomes the 
+        // map's source signal, and if the user releases the drag over any other signal
+        // then it becomes the destination for the map.
+        $('.tableDiv').off('mousedown');
         $('.tableDiv').on('mousedown', 'td.leaf', function(e) {
+            if (self.draggingFrom)
+                return;
             self.escaped = false;
 
             let src_row = $(this).parent('tr')[0];
             let src_table = null;
+            let dst_table = null;
             switch ($(src_row).parents('.tableDiv').attr('id')) {
                 case "leftTable":
                     src_table = self.tables.left;
@@ -779,41 +667,24 @@ class View {
                     console.log('unknown source row');
                     return;
             }
-            if ($(src_row).hasClass('device')) {
-                let dev = self.database.devices.find(src_row.id);
-                if (dev) {
-                    switch (src_table) {
-                    case self.tables.left:
-                        dev.collapsed ^= 1;
-                        break;
-                    case self.tables.right:
-                        dev.collapsed ^= 2;
-                        break;
-                    case self.tables.top:
-                        dev.collapsed ^= 4;
-                        break;
-                    default:
-                        return;
-                    }
-                    self.updateDevices();
-                    self.draw(0);
-                }
-                return;
-            }
 
-            $('#svgDiv').one('mouseenter.drawing', function() {
+            $('#svgDiv').one('mouseenter.drawing', function(e) {
                 deselectAllMaps(self.tables);
-                let id = src_row.id.replace('\\/', '\/');
-                var src = src_table.getRowFromName(id);
+                var src = src_table.getRowFromName(src_row.id);
                 var dst = null;
-                self.draggingFrom = self.database.find_signal(id);
+                self.draggingFrom = self.database.find_signal(src.id);
 
-                self.newMap = self.canvas.path([['M', src.x, src.y],
-                                                ['l', 0, 0]])
-                                         .attr({'fill-opacity': 0,
-                                                'stroke': 'white',
-                                                'stroke-opacity': 1,
-                                                'stroke-width': MapPath.strokeWidth});
+                self.newMap = 
+                {
+                    'srcs': [self.draggingFrom],
+                    'dst': {position: {x: 0, y: 0}},
+                    'selected': true
+                };
+                self.newMap.view = new self.mapPainter(self.newMap, self.canvas, self.frame, self.database);
+
+                let prev_svgx = e.pageX - self.frame.left;
+                let prev_svgy = e.pageY - self.frame.top;
+                let selected_path, selected_len, selected_pos;
 
                 $('svg, .displayTable tbody tr').on('mousemove.drawing', function(e) {
                     // clear table highlights
@@ -830,63 +701,85 @@ class View {
 
                     let x = e.pageX;
                     let y = e.pageY;
-                    let path = null;
+
                     dst = null;
-                    let dst_table = null;
+                    self.newMap.dst = null;
 
                     for (index in self.tables) {
                         // check if cursor is within snapping range
-                        dst = self.tables[index].getRowFromPosition(x, y, 0.2);
+                        let snap_factor = 0.05;
+                        dst = self.tables[index].getRowFromPosition(x, y, snap_factor);
                         if (!dst) continue;
-                        if (dst.id == src.id) {
-                            // don't try to map a sig to itself
-                            dst = null;
-                            continue;
+                        if (dst.id !== src.id) {
+                            self.newMap.dst = self.database.find_signal(dst.id);
+                            self.tables[index].highlightRow(dst, false);
                         }
-                        dst_table = self.tables[index];
+                        else {
+                            dst = null;
+                        }
                         break;
                     }
 
-                    if (src_table == dst_table) {
-                        // draw smooth path from table to self
-                        path = MapPath.sameTable(src, dst, self.mapPane);
+                    let svgx = x - self.frame.left;
+                    let svgy = y - self.frame.top;
+                    if (!self.newMap.dst) {
+                        if (!self.snapping_to_map()) {
+                            let snapped = self._get_map_snap(prev_svgx, prev_svgy, svgx, svgy);
+                            if (snapped !== null) {
+                                self._snap_to_map(snapped); // sets dst to snapped map pos
+                            }
+                        }
+                        if (!self._continue_map_snap(svgx, svgy)) {
+                            self._unsnap_to_map();
+                            self.newMap.dst = {position: {'x': svgx, 'y': svgy}};
+                        }
                     }
-                    else if (dst) {
-                        // draw bezier curve connecting src and dst
-                        path = MapPath.betweenTables(src, dst);
-                    }
-                    else {
-                        // draw smooth path connecting src to cursor
-                        path = [['M', src.x, src.y],
-                                ['S',
-                                 src.x + src.vx * self.mapPane.width * 0.5,
-                                 src.y + src.vy * self.mapPane.height * 0.5,
-                                 x - self.frame.left, y - self.frame.top]];
-                    }
-                    src_table.highlightRow(src, false);
-                    if (dst_table)
-                        dst_table.highlightRow(dst, false);
+                    else self._unsnap_to_map(); // snapping to table
 
-                    self.newMap.attr({'path': path});
+                    self.newMap.view.draw(0);
+                    src_table.highlightRow(src, false);
+                    let dx = prev_svgx - svgx; let dy = prev_svgy - svgy;
+                    if (dx*dx + dy*dy > 100) {
+                        prev_svgx = svgx;
+                        prev_svgy = svgy;
+                    }
                 });
-                $(document).on('mouseup.drawing', function(e) {
-                    $(document).off('.drawing');
-                    $('svg, .displayTable tbody tr').off('.drawing');
-                    if (!self.escaped && dst && dst.id) {
-                        $('#container').trigger('map', [src.id, dst.id]);
-                        self.database.maps.add({'src': self.database.find_signal(src.id),
-                                                'dst': self.database.find_signal(dst.id),
-                                                'key': src.id + '->' + dst.id,
-                                                'status': 'staged'});
+                $(document).one('mouseup.drawing', function(e) {
+                    function finish(convergent_method) {
+                        if (!self.escaped) {
+                            if (convergent_method !== null && self.snapping_to_map()) 
+                                mapper.converge(src.id, self.converging, convergent_method);
+                            else if (src && src.id && dst && dst.id) 
+                                mapper.map(src.id, dst.id);
+                        }
+                        // clean up
+                        self.tables.left.highlightRow(null, true);
+                        self.tables.right.highlightRow(null, true);
+                        self.draggingFrom = null;
+                        self.pie.hide();
+                        if (self.newMap) {
+                            self.newMap.view.remove();
+                            self.newMap = null;
+                        }
+                        if (self.snapping_to_map()) {
+                            self._unsnap_to_map();
+
+                            // **required so that you can keep making maps afterwards...
+                            self.setTableDrag(); 
+                        }
+                        $('svg, .displayTable tbody tr').off('mousemove.drawing');
                     }
-                    // clear table highlights
-                    self.tables.left.highlightRow(null, true);
-                    self.tables.right.highlightRow(null, true);
-                    self.draggingFrom = null;
-                    if (self.newMap) {
-                        self.newMap.remove();
-                        self.newMap = null;
+                    if (self.snapping_to_map())
+                    {
+                        // switch to pie menu interaction
+                        // **so clicking convergent option doesn't start making new map
+                        $('.tableDiv').off('mousedown'); 
+                        
+                        let x = e.pageX - self.frame.left;
+                        let y = e.pageY - self.frame.top;
+                        self._start_converging_pie_menu(x, y, finish);
                     }
+                    else finish();
                 });
             });
             $(document).one('mouseup.drawing', function(e) {
@@ -896,11 +789,113 @@ class View {
         });
     }
 
+    snapping_to_map()
+    {
+        return this.converging !== null
+    }
+
+    _start_converging_pie_menu(x, y, cb)
+    {
+        function finish(convergent_method) {
+            $(document).off('.drawing');
+            $('svg, .displayTable tbody tr').off('.drawing');
+            cb(convergent_method);
+        }
+
+        let strong = false;
+        let convergent_method = null;
+        let self = this;
+        function get_convergent_option(e) {
+            let x = e.pageX - self.frame.left;
+            let y = e.pageY - self.frame.top;
+            convergent_method = self.pie.selection(x, y, strong);
+        }
+
+        this.pie.position(x, y);
+        this.pie.show();
+
+        $(document).off('.drawing');
+        $(document).on('mousedown.drawing', function(e) {
+            if (self.escaped) return finish(convergent_method);
+            strong = true;
+            get_convergent_option(e);
+        });
+        $(document).on('mouseup.drawing', function(e) {
+            finish(convergent_method);
+        });
+
+        $('svg, .displayTable tbody tr').off('.drawing');
+        $('svg, .displayTable tbody tr').on('mousemove.drawing', function(e) {
+            if (self.escaped) return finish(convergent_method);
+            get_convergent_option(e);
+        });
+    }
+
+    _get_map_snap(x1, y1, x2, y2)
+    {
+        let converging = null;;
+        this.database.maps.each(function(map) {
+            if (converging !== null) return;
+            if (map.view && map.view.edge_intersection(x1, y1, x2, y2))
+                converging = map;
+        });
+        return converging;
+    }
+
+    _map_snap_position(map)
+    {
+        let selected_path = map.view.intersected;
+        let selected_len = selected_path.getTotalLength();
+        return selected_path.getPointAtLength(selected_len / 2);
+    }
+
+    _snap_to_map(snap_map)
+    {
+        this.database.maps.each(map => map.selected = false);
+        if (this.snapping_to_map()) this.converging.view.draw(0); // unhighlight
+        this.converging = snap_map;
+        this.converging.selected = true;
+        this.converging.view.draw(0);
+        this.newMap.dst = {position: this._map_snap_position(this.converging)}
+    }
+
+    _continue_map_snap(x, y, snapdist = 50)
+    {
+        if (!this.snapping_to_map()) return false; // can't continue if haven't started
+        let cp = this.converging.view.closest_point(x, y);
+        if (cp.distance < snapdist) return true;
+        return false;
+    }
+
+    _unsnap_to_map()
+    {
+        if (!this.snapping_to_map()) return; // can't unsnap if not snapped
+        this.converging.selected = false;
+        this.converging.view.draw(0);
+        this.converging = null;
+    }
+
     cleanup() {
         // clean up any objects created only for this view
         $(document).off('.drawing');
         $('svg, .displayTable tbody tr').off('.drawing');
         $('.tableDiv').off('mousedown');
+        this.tooltip.hide(true);
+    }
+
+    // sets the map painter for the view and converts existing map views to use
+    // the new painter. This should be called rather than setting the mapPainter
+    // property of this manually, which does not update the painter owned by
+    // each map
+    setMapPainter(painter) {
+        this.mapPainter = (painter === "undefined") ? MapPainter : painter;
+        let self = this;
+        this.database.maps.each(function(map) {
+            if (!map.view) return;
+            let newview = new self.mapPainter(map, self.canvas, self.frame, self.database);
+            newview.copy(map.view);
+            map.view = newview;
+        });
     }
 }
 
@@ -918,8 +913,8 @@ class MapPath {
         let dy = dst.y - src.y;
         let vertical = fuzzyEq(src.vy, 0, 0.001);
         return [['M', src.x, src.y],
-                    ['l', vertical ? dx : 0, vertical ? 0 : dy],
-                    ['L', dst.x, dst.y]];
+                ['l', vertical ? dx : 0, vertical ? 0 : dy],
+                ['L', dst.x, dst.y]];
     }
 
     static sameTable(srcrow, dstrow, mapPane) {
@@ -938,9 +933,8 @@ class MapPath {
         if (offset > maxoffset) offset = maxoffset;
         if (offset < minoffset) offset = minoffset;
         let ctlx = src.x + offset * src.vx;
-        return [ ['M', src.x, src.y]
-               , ['C', ctlx, src.y, ctlx, dst.y, dst.x, dst.y]
-               ];
+        return [['M', src.x, src.y],
+                ['C', ctlx, src.y, ctlx, dst.y, dst.x, dst.y]];
     }
 
     static horizontal(src, dst) {

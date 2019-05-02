@@ -80,9 +80,39 @@ MapperNodeArray.prototype = {
         else {
             if (this.obj_type == 'device') {
                 obj.signals = new MapperNodeArray('signal', this.cb_func);
-                obj.color = Raphael.getColor();
+
+                // create hue hash
+                hueHash = function(str) {
+                    var hash = 0, i, chr;
+                    if (str.length === 0) return '#000000';
+                    // separate name and ordinal
+                    let ord_idx = str.lastIndexOf('.');
+                    let ord = str.slice(ord_idx+1);
+                    str = str.slice(0, ord_idx);
+                    for (i = 0; i < str.length; i++) {
+                        chr   = str.charCodeAt(i);
+                        hash  = ((hash << 5) - hash) + (1 << chr);
+                        hash &= 0xFFFFFF; // Constrain to 48bits
+                    }
+                    // add ordinal, multiplied to be visually discriminable
+                    hash += parseInt(ord) * 600000;
+                    // constrain and normalize
+                    hash = (hash & 0xFFFFFF) / 0xFFFFFF;
+                    // convert to hue
+                    return hash;
+                };
+                obj.hue = hueHash(key);
             }
             this.contents[key] = obj;
+
+            // sort by key
+            let ordered = {};
+            let contents = this.contents;
+            Object.keys(contents).sort(namespaceSort).forEach(function(k) {
+                ordered[k] = contents[k];
+            });
+            this.contents = ordered;
+
             if (this.cb_func)
                 this.cb_func('added', this.obj_type, this.contents[key]);
         }
@@ -100,8 +130,6 @@ MapperNodeArray.prototype = {
             if (this.cb_func)
                 this.cb_func('removed', this.obj_type, {'key': key});
         }
-        if (this.size() == 0)
-            Raphael.getColor.reset();
         return key;
     },
 
@@ -152,31 +180,56 @@ MapperEdgeArray.prototype = {
     },
 
     add : function(obj) {
-//        console.log(this.obj_type+'s.add', obj);
+        // console.log(this.obj_type+'s.add', obj.key, obj);
         let key = obj.key;
+        let id = obj.id;
         if (!key)
             return null;
 
-        if (key in this.contents) {
-            let prop, existing = this.contents[key];
-            let updated = false;
-            // copy properties from update
-            for (prop in obj) {
-                if (obj.hasOwnProperty(prop)
-                    && !is_equal(existing[prop], obj[prop])) {
-                    existing[prop] = obj[prop];
-                    updated = true;
+        let existing = this.contents[key];
+        if (typeof id !== 'undefined') {
+            for (let i in this.contents) {
+                let edge = this.contents[i];
+                if (edge.id == id) {
+                    if (!existing) {
+                        existing = edge;
+                        this.contents[key] = existing;
+                        delete this.contents[existing.key]
+                        break;
+                    }
+                    else if (existing !== edge) {
+                        this._merge(existing, edge);
+                        this.remove(this.contents[i]);
+                    }
                 }
             }
-            if (updated && this.cb_func)
-                this.cb_func('modified', this.obj_type, existing);
+        }
+        if (existing) {
+            this._merge(existing, obj);
         }
         else {
             this.contents[key] = obj;
             if (this.cb_func)
                 this.cb_func('added', this.obj_type, this.contents[key]);
         }
+        // console.log(this.obj_type+"s contents: ", this.contents);
         return this.contents[key];
+    },
+
+    _merge : function(existing, obj) {
+        // copy properties from update
+        let prop;
+        let updated = false;
+        for (prop in obj) {
+            if (obj.hasOwnProperty(prop)
+                && !is_equal(existing[prop], obj[prop])) {
+                existing[prop] = obj[prop];
+                updated = true;
+            }
+        }
+        if (updated && this.cb_func) {
+            this.cb_func('modified', this.obj_type, existing);
+        }
     },
 
     remove : function(obj) {
@@ -240,13 +293,13 @@ function MapperDatabase() {
         let maps = this.maps;
         dev.signals.each(function(sig) {
             maps.each(function(map) {
-                if (sig == map.src || sig == map.dst)
+                if (map.srcs.indexOf(sig) >= 0 || sig == map.dst)
                     maps.remove(map);
             });
         });
         let links = this.links;
         links.each(function(link) {
-            if (link.src == dev.name || link.dst == dev.name)
+            if (link.src == dev || link.dst == dev)
                 links.remove(link);
         });
         this.devices.remove(dev);
@@ -278,6 +331,7 @@ function MapperDatabase() {
         return dev ? dev.signals.find(String(name.join('/'))) : null;
     }
     this.add_maps = function(cmd, maps) {
+        // TODO: check for convergent maps and add appropriate links
         let self = this;
         findSig = function(name) {
             name = name.split('/');
@@ -296,14 +350,14 @@ function MapperDatabase() {
             return dev.signals.find(name);
         }
         for (var i in maps) {
-            let src = findSig(maps[i].src);
+            let srcs = maps[i].srcs.map(s => findSig(s));
             let dst = findSig(maps[i].dst);
-            if (!src || !dst) {
+            if (!srcs.every(e => e) || !dst) {
                 console.log("error adding map: couldn't find signals",
-                            maps[i].src, maps[i].dst);
+                            maps[i].srcs, maps[i].dst);
                 return;
             }
-            maps[i].src = src;
+            maps[i].srcs = srcs;
             maps[i].dst = dst;
 //            maps[i].status = 'active';
             let map = this.maps.add(maps[i]);
@@ -312,35 +366,38 @@ function MapperDatabase() {
                 return;
             }
 
-            let link_key;
-            let rev = false;
-            if (src.device.name < dst.device.name)
-                link_key = src.device.name + '<->' + dst.device.name;
-            else {
-                link_key = dst.device.name + '<->' + src.device.name;
-                rev = true;
-            }
-            let link = this.links.find(link_key);
-            if (!link) {
-                link = this.links.add({'key': link_key,
-                                       'src': rev ? dst.device : src.device,
-                                       'dst': rev ? src.device : dst.device,
-                                       'maps': [map.key],
-                                       'status': map.status});
-                if (src.device.links)
-                    src.device.links.push(link_key);
-                else
-                    src.device.links = [link_key];
-                if (dst.device.links)
-                    dst.device.links.push(link_key);
-                else
-                    dst.device.links = [link_key];
-            }
-            else if (!link.maps.includes(map.key))
-                link.maps.push(map.key);
-            if (link.status != 'active' && map.status == 'active') {
-                link.status = 'active';
-                this.links.cb_func('modified', 'link', link);
+            for (var j in srcs) {
+                let src = srcs[j];
+                let link_key;
+                let rev = false;
+                if (src.device.name < dst.device.name)
+                    link_key = src.device.name + '<->' + dst.device.name;
+                else {
+                    link_key = dst.device.name + '<->' + src.device.name;
+                    rev = true;
+                }
+                let link = this.links.find(link_key);
+                if (!link) {
+                    link = this.links.add({'key': link_key,
+                                           'src': rev ? dst.device : src.device,
+                                           'dst': rev ? src.device : dst.device,
+                                           'maps': [map.key],
+                                           'status': map.status});
+                    if (src.device.links)
+                        src.device.links.push(link_key);
+                    else
+                        src.device.links = [link_key];
+                    if (dst.device.links)
+                        dst.device.links.push(link_key);
+                    else
+                        dst.device.links = [link_key];
+                }
+                else if (!link.maps.includes(map.key))
+                    link.maps.push(map.key);
+                if (link.status != 'active' && map.status == 'active') {
+                    link.status = 'active';
+                    this.links.cb_func('modified', 'link', link);
+                }
             }
         }
     }
@@ -348,24 +405,27 @@ function MapperDatabase() {
         map = this.maps.find(map.key);
         if (!map)
             return;
-        let link_key;
-        if (map.src.device.name < map.dst.device.name)
-            link_key = map.src.device.name + '<->' + map.dst.device.name;
-        else
-            link_key = map.dst.device.name + '<->' + map.src.device.name;
-        let link = this.links.find(link_key);
-        if (link) {
-            let index = link.maps.indexOf(map.key);
-            if (index > -1)
-                link.maps.splice(index, 1);
-            if (link.maps.length == 0) {
-                index = link.src.links.indexOf(link_key);
+        for (var j in map.srcs) {
+            let src = map.srcs[j];
+            let link_key;
+            if (src.device.name < map.dst.device.name)
+                link_key = src.device.name + '<->' + map.dst.device.name;
+            else
+                link_key = map.dst.device.name + '<->' + src.device.name;
+            let link = this.links.find(link_key);
+            if (link) {
+                let index = link.maps.indexOf(map.key);
                 if (index > -1)
-                    link.src.links.splice(index, 1);
-                index = link.dst.links.indexOf(link_key);
-                if (index > -1)
-                    link.dst.links.splice(index, 1);
-                this.links.remove(link);
+                    link.maps.splice(index, 1);
+                if (link.maps.length == 0) {
+                    index = link.src.links.indexOf(link_key);
+                    if (index > -1)
+                        link.src.links.splice(index, 1);
+                    index = link.dst.links.indexOf(link_key);
+                    if (index > -1)
+                        link.dst.links.splice(index, 1);
+                    this.links.remove(link);
+                }
             }
         }
         this.maps.remove(map);
@@ -522,8 +582,8 @@ function MapperDatabase() {
 
     this.exportFile = function() {
         let file = { "fileversion": "2.2",
-            "mapping": { "maps": [] }
-        };
+                     "mapping": { "maps": [] },
+                     "views": { "signals": []} };
         let numMaps = 0;
 
         this.maps.each(function(map) {
@@ -531,8 +591,12 @@ function MapperDatabase() {
             if (!map.view)
                 return;
             let m = {'sources': [], 'destinations': []};
-            let src = {};
-            let dst = {};
+            for (var i in map.srcs) {
+                m.sources.push({'name': map.srcs[i].key,
+                                'direction': map.srcs[i].direction});
+            }
+            m.destinations.push({'name': map.dst.key,
+                                 'direction': map.dst.direction});
             for (var attr in map) {
                 switch (attr) {
                     // ignore a few properties
@@ -541,12 +605,8 @@ function MapperDatabase() {
                     case 'key':
                         break;
                     case 'src':
-                        src.name = map.src.key;
-                        src.direction = map.src.direction;
-                        break;
+                    case 'srcs':
                     case 'dst':
-                        dst.name = map.dst.key;
-                        dst.direction = map.dst.direction;
                         break;
                     case 'expression':
                         // need to replace x and y variables with signal references
@@ -571,29 +631,34 @@ function MapperDatabase() {
                         if (attr.startsWith('src_')) {
                             let key = attr.slice(4);
                             if (key == 'min' || key == 'max')
-                                src[key + 'imum'] = map[attr];
+                                m.sources[0][key + 'imum'] = map[attr];
                             else
-                                src[key] = map[attr];
+                                m.sources[0][key] = map[attr];
                         }
                         else if (attr.startsWith('dst_')) {
                             let key = attr.slice(4);
                             if (key == 'min' || key == 'max')
-                                dst[key + 'imum'] = map[attr];
+                                m.destinations[0][key + 'imum'] = map[attr];
                             else
-                                dst[key] = map[attr];
+                                m.destinations[0][key] = map[attr];
                         }
                         else
                             m[attr] = map[attr];
                         break;
                 }
             }
-            m.sources.push(src);
-            m.destinations.push(dst);
             file.mapping.maps.push(m);
             numMaps++;
         });
         if (!numMaps)
             alert("No maps to save!");
+        this.devices.each(function(dev) {
+            dev.signals.each(function(sig) {
+                if (sig.canvasObject)
+                    file.views.signals.push({'name': sig.key,
+                                             'position': sig.canvasObject});
+            });
+        });
         return numMaps ? file : null;
     }
     
@@ -610,13 +675,14 @@ function MapperDatabase() {
             for (var i in file.mapping.connections) {
                 let c = file.mapping.connections[i];
                 let map = {};
-                let src = {'name': c.source[0].slice(1)};
-                let dst = {'name': c.destination[0].slice(1)};
+                let src = {'name': c.src[0].slice(1)};
+                let dst = {'name': c.dest[0].slice(1)};
                 if (c.mute != null)
                     map.muted = c.mute ? true : false;
                 if (c.expression != null)
                     map.expression = c.expression.replace('s[', 'src[')
-                    .replace('d[', 'dst[');
+                    .replace('d[', 'dst[')
+                    .replace('dest[', 'dst[');
                 if (c.srcMin != null)
                     src.minimum = c.srcMin;
                 if (c.srcMax != null)
@@ -659,9 +725,10 @@ function MapperDatabase() {
             let map = file.mapping.maps[i];
             // TODO: enable multiple sources and destinations
             
+            let srcs = map.sources.map(s => s.name);
             let src = map.sources[0].name;
             let dst = map.destinations[0].name;
-            console.log(map.sources[0].name,'->');
+            console.log('Map from file:', srcs,'->',dst);
             if (!src || !dst) {
                 console.log("error adding map from file:", map);
                 continue;
@@ -673,19 +740,27 @@ function MapperDatabase() {
             if (map.destinations[0].bound_min)
                 map.dst_bound_min = map.destinations[0].bound_min;
             if (map.destinations[0].bound_max)
-                map.dst_bound_min = map.destinations[0].bound_max;
+                map.dst_bound_max = map.destinations[0].bound_max;
             if (map.sources[0].calibrating)
                 map.src_calibrating = map.sources[0].calibrating;
             if (map.destinations[0].calibrating)
                 map.dst_calibrating = map.destinations[0].calibrating;
             if (map.sources[0].min)
                 map.src_min = map.sources[0].min;
+            else if (map.sources[0].minimum)
+                map.src_min = map.sources[0].minimum;
             if (map.sources[0].max)
                 map.src_max = map.sources[0].max;
+            else if (map.sources[0].maximum)
+                map.src_max = map.sources[0].maximum;
             if (map.destinations[0].min)
                 map.dst_min = map.destinations[0].min;
+            else if (map.destinations[0].minimum)
+                map.dst_min = map.destinations[0].minimum;
             if (map.destinations[0].max)
                 map.dst_max = map.destinations[0].max;
+            else if (map.destinations[0].maximum)
+                map.dst_max = map.destinations[0].maximum;
             delete map.sources;
             delete map.destinations;
             map.src = src;
@@ -694,12 +769,39 @@ function MapperDatabase() {
             if (map.expression) {
                 // fix expression
                 // TODO: better regexp to avoid conflicts with user vars
-                map.expression = map.expression.replace(/src/g, "x");
-                map.expression = map.expression.replace(/dst/g, "y");
+                map.expression = map.expression.replace('src[0]', "x")
+                                               .replace('dst[0]', "y")
+                                               .replace('dst', "y");
             }
-            $('#container').trigger('map', [src, dst, map]);
-            //this.maps.add(map);
+            console.log(map.expression)
 
+            srcs = srcs.map(s => s.slice(s.indexOf('/')));
+            src = src.slice(src.indexOf('/'));
+            dst = dst.slice(dst.indexOf('/'));
+            let self = this;
+            this.devices.each(function(d1) {
+                if (d1.hidden)
+                    return;
+                let srcsigs = srcs.map(s => {
+                    if (typeof s !== 'string') return s;
+                    let sig = d1.signals.find(d1.name+s)
+                    if (sig) return sig;
+                    else return s;
+                });
+                let srcsig = d1.signals.find(d1.name+src);
+                if (!srcsigs.every(s => typeof s.key === 'string'))
+                    return;
+                let dstsig = null;
+                self.devices.each(function (d2) {
+                    if (d2.hidden)
+                        return;
+                    dstsig = d2.signals.find(d2.name+dst);
+                    if (!dstsig)
+                        return;
+                    console.log('  Creating map:', srcsig.key, '->', dstsig.key);
+                    mapper._map(srcsigs.map(s => s.key), dstsig.key, map);
+                });
+            });
         }
     }
 
@@ -718,3 +820,5 @@ function MapperDatabase() {
     command.register("add_maps", this.add_maps.bind(this));
     command.register("del_map", this.del_map.bind(this));
 };
+
+var database = new MapperDatabase();

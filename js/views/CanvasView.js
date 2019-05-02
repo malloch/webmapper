@@ -5,43 +5,75 @@
 'use strict';
 
 class CanvasView extends View {
-    constructor(frame, tables, canvas, database, tooltip) {
-        super('canvas', frame, {'left': tables.left}, canvas, database, tooltip);
+    constructor(frame, tables, canvas, database, tooltip, pie) {
+        super('canvas', frame, tables, canvas, database, tooltip, pie,
+              CanvasMapPainter);
+
+        this.leftExpandWidth = 200;
+
+        this.dragging = null;
+        this.trashing = false;
+
+        this.setup();
+    }
+
+    setup() {
+        this.setMapPainter(CanvasMapPainter);
 
         // set left table properties
+        this.tables.left.hidden = false;
         this.tables.left.filterByDirection('both');
         this.tables.left.showDetail(true);
         this.tables.left.expand = true;
+        this.tables.left.ignoreCanvasObjects = true;
+        // update table to remove rows with associated canvasObjects
+        this.tables.left.update();
 
         // hide right table
-        tables.right.adjust(frame.width, 0, 0, frame.height, 0, 1000, null, 0, 0);
+        this.tables.right.adjust(this.frame.width, 0, 0,
+                                 this.frame.height, 0, 500, null, 0, 0);
+        this.tables.right.hidden = true;
+
+        this.setCanvasTableDrag();
 
         // remove device and unused signal svg
+        let self = this;
         this.database.devices.each(function(dev) {
             dev.signals.each(function(sig) {
-                if (!sig.canvas_object)
+                if (!sig.canvasObject) {
                     remove_object_svg(sig);
+                    return;
+                }
+                let c = sig.canvasObject;
+                sig.position.left = c.left;
+                sig.position.top = c.top;
+                sig.position.width = c.width;
+                sig.position.height = c.height;
+                if (sig.view) {
+                    self.setSigHover(sig);
+                    self.setSigDrag(sig);
+                }
             });
-            if (!dev.view)
-                return;
-            // remove device labels
-            if (dev.view.label) {
-                dev.view.label.remove();
-                dev.view.label = null;
-            }
+            remove_object_svg(dev);
         });
 
-        this.leftExpandWidth = 200;
-        this.resize(null, 1000);
+        this.tables.left.resizeHandler = function() {
+            if (self.tables.left.expandWidth != self.leftExpandWidth) {
+                self.leftExpandWidth = self.tables.left.expandWidth;
+                self.resize(null, 500);
+            }
+            self.drawMaps(0);
+        };
+        this.tables.right.resizeHandler = null;
+
+        this.resize(null, 500);
     }
 
-    resize(newFrame, duration) {
-        if (newFrame)
-            this.frame = newFrame;
-
+    _resize(duration) {
         let self = this;
         this.tables.left.adjust(0, 0, this.leftExpandWidth, this.frame.height,
-                                0, duration, function() {self.draw()}, 0, 0);
+                                0, duration, function() {self.drawMaps(duration)},
+                                0, 0);
         this.mapPane.left = this.leftExpandWidth;
         this.mapPane.width = this.frame.width - this.leftExpandWidth;
         this.mapPane.height = this.frame.height;
@@ -50,38 +82,24 @@ class CanvasView extends View {
     }
 
     setSigHover(sig) {
+        let self = this;
+        sig.view.unhover();
         sig.view.hover(
             function() {
-                if (draggingFrom == null)
+                if (self.draggingFrom == null)
                    return;
-                if (sig == draggingFrom) {
+                if (sig == self.draggingFrom) {
                    // don't snap to self
                    return;
                 }
                 // snap to sig object
-                let src = draggingFrom.canvas_object;
-                let dst = sig.canvas_object;
-                let src_offset = src.width * 0.5 + 10;
-                let dst_offset = dst.width * 0.5 + 10;
-                let path = null;
-                if (dragging == 'left') {
-                   path = [['M', src.left - src_offset, src.top],
-                           ['C', src.left - src_offset * 3, src.top,
-                            dst.left + dst_offset * 3, dst.top,
-                            dst.left + dst_offset, dst.top]];
-                }
-                else {
-                   path = [['M', src.left + src_offset, src.top],
-                           ['C', src.left + src_offset * 3, src.top,
-                            dst.left - dst_offset * 3, dst.top,
-                            dst.left - dst_offset, dst.top]];
-                }
-                snappingTo = sig;
-                new_map.attr({'path': path});
+                self.snappingTo = sig;
+                self.newMap.dst = sig;
+                self.newMap.view.draw(0);
                 return;
             },
             function() {
-                snappingTo = null;
+                self.snappingTo = null;
             }
         );
     }
@@ -89,194 +107,166 @@ class CanvasView extends View {
     // override signal drag so we can move signal representation around
     setSigDrag(sig) {
         let self = this;
+        sig.view.unmouseup();
         sig.view.mouseup(function() {
-            if (draggingFrom && snappingTo) {
-                $('#container').trigger('map', [draggingFrom.key, snappingTo.key]);
-                if (self.newMap) {
-                    self.newMap.remove();
-                    self.newMap = null;
-                }
-            }
-            else if (trashing) {
+            if (self.trashing) {
                 sig.view.label.remove();
                 sig.view.remove();
                 sig.view = null;
-                sig.canvas_object = null;
-                trashing = false;
-                self.redraw(0, false);
+                sig.canvasObject = null;
+                self.trashing = false;
+                // update table to replace signal row and position getters
+                self.tables.left.update();
+                // update maps
+                self.drawMaps(0);
+                self.draggingFrom = self.snappingTo = null;
             }
+            else if (self.draggingFrom && self.snappingTo) {
+                mapper.map(self.draggingFrom.key, self.snappingTo.key);
+                if (self.newMap) {
+                    self.newMap.view.remove();
+                    self.newMap = null;
+                }
+            }
+            // move svg canvas to back
+            $('#svgDiv').css({'position': 'relative', 'z-index': 0});
         });
+        sig.view.undrag();
         sig.view.drag(
             function(dx, dy, x, y, event) {
-                if (escaped) {
+                let x1 = x * self.canvas.zoom + self.canvas.pan.x;
+                let y1 = y * self.canvas.zoom + self.canvas.pan.y;
+                let p = sig.position;
+                let c = sig.canvasObject;
+                if (self.escaped) {
                     self.draggingFrom = null;
-                    delete sig.canvas_object.drag_offset;
-                    dragging = null;
-                    trashing = false;
+                    delete p.drag_offset;
+                    self.dragging = null;
+                    self.trashing = false;
                     if (self.newMap) {
-                        self.newMap.remove();
+                        self.newMap.view.remove();
                         self.newMap = null;
                     }
                     return;
                 }
-                let obj = sig.canvas_object;
-                if (dragging == 'obj') {
-                    obj.left = x + obj.drag_offset.x;
-                    obj.top = y + obj.drag_offset.y;
-                    constrain(obj, self.mapPane, 5);
+                if (self.dragging == 'obj') {
+                    p.left = x1 + p.drag_offset.x;
+                    p.top = y1 + p.drag_offset.y;
+                    p.x = p.left + p.width * 0.5;
+                    p.y = p.top + p.height * 0.5;
+                    c.left = p.left;
+                    c.top = p.top;
+                    self.drawSignal(sig);
 
-                    sig.view.stop()
-                    sig.view.attr({'path': canvas_rect_path(obj)});
-                    sig.view.label.attr({'x': obj.left,
-                                         'y': obj.top,
-                                         'opacity': 1}).toFront();
-
-                    x -= self.mapPane.width + map_pane.left;
-                    y -= self.mapPane.height + frame.top;
-                    let dist = Math.sqrt(x * x + y * y)
-                    if (dist < 100) {
+                    if (x < self.mapPane.left) {
                         sig.view.attr({'stroke': 'gray'});
-                        trashing = true;
+                        self.trashing = true;
                     }
                     else {
-                        sig.view.attr({'stroke': sig.device.color});
-                        trashing = false;
+                        sig.view.attr({'stroke': Raphael.hsl(sig.device.hue, 1, 0.3)});
+                        self.trashing = false;
                     }
-                    self.redraw(0, false);
+
+                    self.drawMaps(0, sig);
                     return;
                 }
-                else if (!snappingTo) {
-                    let offset = obj.width * 0.5 + 10;
-                    let arrow_start = 'none';
-                    let arrow_end = 'none';
-                    if (dragging == 'left') {
-                        offset *= -1;
-                        arrow_start = 'block-wide-long';
-                    }
-                    else
-                        arrow_end = 'block-wide-long';
-                    x -= frame.left;
-                    y -= frame.top;
-                    let path = [['M', obj.left + offset, obj.top],
-                                ['C', obj.left + offset * 3, obj.top,
-                                 x - offset * 3, y, x, y]];
-                    new_map.attr({'path': path,
-                                  'stroke': 'white',
-                                  'stroke-opacity': 1,
-                                  'arrow-start': arrow_start,
-                                  'arrow-end': arrow_end});
+                else if (!self.snappingTo) {
+                    x1 -= self.frame.left;
+                    y1 -= self.frame.top;
+                    self.newMap.dst.position.x = x1;
+                    self.newMap.dst.position.y = y1;
+                    self.newMap.view.draw(0);
                 }
             },
             function(x, y, event) {
-                escaped = false;
-                draggingFrom = sig;
-                let obj = sig.canvas_object;
-                obj.drag_offset = position(obj.left - x, obj.top - y);
-                if (x < obj.left - obj.width * 0.5 + 5)
-                    dragging = 'left';
-                else if (x > obj.left + obj.width * 0.5 - 5)
-                    dragging = 'right';
-                else
-                    dragging = 'obj';
-                self.newMap = canvas.path();
+                x = x * self.canvas.zoom + self.canvas.pan.x;
+                y = y * self.canvas.zoom + self.canvas.pan.y;
+                self.escaped = false;
+                self.draggingFrom = sig;
+                let p = sig.position;
+                p.drag_offset = position(p.left - x, p.top - y);
+                if (x < p.left - p.width * 0.5 + 5)
+                    self.dragging = 'left';
+                else if (x > p.left + p.width * 0.5 - 5)
+                    self.dragging = 'right';
+                else {
+                    self.dragging = 'obj';
+                    // move svg canvas to front
+                    $('#svgDiv').css({'z-index': 2});
+                }
+                if (self.dragging !== 'obj') {
+                    self.newMap = 
+                        {
+                            'src': sig,
+                            'srcs': [sig],
+                            'dst': {'position': {'width': 2, 'x': x, 'y': y}, 'device': {'hidden' : false}, 'view': {}},
+                            'selected': true,
+                            'hidden': false
+                        };
+                    self.newMap.view = new self.mapPainter(self.newMap, self.canvas, self.frame, self.database);
+                }
             },
             function(x, y, event) {
-                draggingFrom = null;
-                if (sig.canvas_object)
-                    delete sig.canvas_object.drag_offset;
-                dragging = null;
+                self.draggingFrom = null;
+                if (sig.canvasObject)
+                    delete sig.position.drag_offset;
+                self.dragging = null;
                 if (self.newMap) {
-                    self.newMap.remove();
+                    self.newMap.view.remove();
                     self.newMap = null;
                 }
+                // move svg canvas to back
+                $('#svgDiv').css({'z-index': 0});
             }
         );
     }
 
     drawSignal(sig, duration) {
-        if (!sig.canvas_object) {
+        if (!sig.canvasObject) {
             // remove associated svg element
             remove_object_svg(sig);
             return;
         }
-        let path = canvas_rect_path(sig.canvas_object);
+        let path = [['M', sig.position.left - sig.position.width * 0.5, sig.position.top],
+                    ['l', sig.position.width, 0]];
 
         let attrs = {'path': path,
-                     'stroke': sig.device.color,
-                     'stroke-opacity': 0.75,
-                     'stroke-width': 20,
+                     'stroke': Raphael.hsl(sig.device.hue, 1, 0.3),
+                     'stroke-opacity': 1,
+                     'stroke-width': sig.canvasObject.height,
                      'fill': 'white',
                      'fill-opacity': 1};
         if (!sig.view) {
-            sig.view = canvas.path(path);
+            sig.view = this.canvas.path(path);
             this.setSigHover(sig);
             this.setSigDrag(sig);
         }
-        else {
+        else
             sig.view.stop();
-            if (first_draw) {
-                set_sig_hover(sig);
-                set_sig_drag(sig);
-            }
-        }
-        sig.view.attr({'stroke-linecap': 'round'});
-        sig.view.animate(attrs, duration, '>');
         if (!sig.view.label) {
-            let key = (sig.direction == 'input') ? '→ ' + sig.key : sig.key + ' →';
-            sig.view.label = canvas.text(sig.position.x, sig.position.y, key);
+            // TODO: use canvasObject appearance to indicate signal direction
+            let key = sig.key;
+            sig.view.label = this.canvas.text(sig.position.x, sig.position.y, key);
             sig.view.label.node.setAttribute('pointer-events', 'none');
+            sig.view.label.toFront();
+            sig.view.label.attr({'font-size': 16,
+                                 'opacity': 1,
+                                 'fill': 'white'});
         }
         else
             sig.view.label.stop();
-        sig.view.label.attr({'font-size': 16});
-        sig.view.label.animate({'x': sig.canvas_object.left,
-                                'y': sig.canvas_object.top,
-                                'opacity': 1,
-                                'fill': 'white'},
-                               duration, '>').toFront();
-    }
 
-    drawMaps(duration) {
-        // todo: add optional mapAttachPoint to sig representation
-        // if present, use it instead of table
-        // needs direction
-        let self = this;
-        this.database.maps.each(function(map) {
-            if (!map.view)
-                return;
-            map.view.stop();
-            let path = canvas_bezier(map, self.tables.left, self.mapPane.left);
-            if (!path) {
-                console.log("failed to create bezier path");
-                return;
-            }
-            let color;
-            let len = Raphael.getTotalLength(path) * 0.5;
-            if (map.src.canvas_object && map.dst.canvas_object)
-                color = 'white';
-            else
-                color = 'lightgray';
-            if (map.view.new) {
-                map.view.attr({'path': [['M', path[0][1], path[0][2]],
-                                        ['l', 0, 0]],
-                               'stroke-opacity': 1,
-                               'fill-opacity': 0});
-                let path_mid = Raphael.getSubpath(path, 0, len);
-                map.view.animate({'path': path_mid}, duration * 0.5, '>',
-                                 function() {
-                    map.view.animate({'path': path}, duration * 0.5, '>');
-                });
-                map.view.new = false;
-            }
-            else {
-                map.view.animate({'path': path,
-                                  'stroke-opacity': 1,
-                                  'fill-opacity': 0}, duration, '>');
-            }
-            map.view.attr({'stroke-width': 2,
-                           'arrow-end': 'block-wide-long',
-                           'stroke': color});
-        });
+        if (!duration || duration < 0) {
+            sig.view.attr(attrs);
+            sig.view.label.attr({'x': sig.position.left,
+                                 'y': sig.position.top});
+        }
+        else {
+            sig.view.animate(attrs, duration, '>');
+            sig.view.label.animate({'x': sig.position.left,
+                                    'y': sig.position.top},
+                                   duration, '>');
+        }
     }
 
     update() {
@@ -292,132 +282,301 @@ class CanvasView extends View {
                 elements = arguments;
                 break;
         }
+        let updated = false;
         if (elements.indexOf('devices') >= 0 || elements.indexOf('signals') >= 0) {
             this.updateDevices();
-            let updated = false;
+            let grow = false;
             if (this.tables.left.expandWidth != this.leftExpandWidth) {
                 this.leftExpandWidth = this.tables.left.expandWidth;
-                updated = true;
+                grow = true;
             }
-            if (updated)
-                this.resize(null, 1000);
+            if (grow)
+                this.resize(null, 500);
+            updated = true;
         }
-        if (elements.indexOf('maps') >= 0)
+        if (elements.indexOf('maps') >= 0) {
             this.updateMaps();
-        this.draw(1000);
+            updated = true;
+        }
+        if (updated)
+            this.draw(500);
     }
 
     draw(duration) {
-        this.drawDevices(duration);
+        this.drawSignals(duration);
         this.drawMaps(duration);
     }
 
     pan(x, y, delta_x, delta_y) {
-        if (x < this.tables.left.frame.width)
-            this.tablePan(x, y, delta_x, delta_y);
-        else
+        if (x < this.tables.left.frame.width) {
+            if (this.tablePan(x, y, delta_x, delta_y))
+                this.drawMaps();
+        }
+        else {
+            this.tablePan(null, null, delta_x, delta_y);
             this.canvasPan(x, y, delta_x, delta_y);
+            this.drawMaps(0);
+        }
     }
 
     zoom(x, y, delta) {
-        if (x < this.tables.left.frame.width)
-            this.tableZoom(x, y, delta);
-        else
+        if (x < this.tables.left.frame.width) {
+            if (this.tableZoom(x, y, delta))
+                this.drawMaps();
+        }
+        else {
             this.canvasZoom(x, y, delta);
+            this.drawMaps(0);
+        }
     }
 
-//    $('.tableDiv').on('mousedown', 'tr', function(e) {
-//        escaped = false;
-//        var src_row = this;
-//        if ($(src_row).hasClass('device')) {
-//            let dev = this.database.devices.find(src_row.id);
-//            if (dev) {
-//                dev.collapsed ^= 1;
-//                redraw(200, true);
-//            }
-//            return;
-//        }
-//
-//        $('svg').one('mouseenter.drawing', function() {
-//            deselect_all_maps();
-//
-//            var src = tables.left.row_from_name(src_row.id.replace('\\/', '\/'));
-//            src.left += src.width;
-//            src.cx += src.width;
-//            var dst = null;
-//            var width = labelwidth(src.id);
-//
-//            // add object to canvas
-//            let sig = this.database.find_signal(src.id);
-//            if (!sig)
-//                return;
-//
-//            let x = e.pageX - frame.left;
-//            let y = e.pageY - frame.top;
-//
-//            if (!sig.view) {
-//                sig.view = canvas.path().attr({'stroke-width': 20,
-//                                               'stroke-opacity': 0.75,
-//                                               'stroke': sig.device.color,
-//                                               'stroke-linecap': 'round'});
-//                sig.view.label = canvas.text(x, y, sig.key)
-//                                       .attr({'fill': 'white',
-//                                              'opacity': 1,
-//                                              'font-size': 16})
-//                                       .toFront();
-//                sig.view.label.node.setAttribute('pointer-events', 'none');
-//            }
-//
-//            // draw canvas object
-//            let temp = { 'left': x, 'top': y, 'width': width, 'height': 20 };
-//            constrain(temp, map_pane, 5);
-//            sig.view.attr({'path': canvas_rect_path(temp)});
-//
-//            $('svg, .displayTable tbody tr').on('mousemove.drawing', function(e) {
-//                if (escaped) {
-//                    $(document).off('.drawing');
-//                    $('svg, .displayTable tbody tr').off('.drawing');
-//                    return;
-//                }
-//                let x = e.pageX - frame.left;
-//                let y = e.pageY - frame.top;
-//
-//                // draw canvas object
-//                let temp = { 'left': x, 'top': y, 'width': width, 'height': 20 };
-//                constrain(temp, map_pane, 5);
-//                sig.view.attr({'path': canvas_rect_path(temp)});
-//                sig.view.label.attr({'x': temp.x, 'y': temp.y}).toFront();
-//            });
-//            $(document).on('mouseup.drawing', function(e) {
-//                $(document).off('.drawing');
-//                $('svg, .displayTable tbody tr').off('.drawing');
-//
-//                let obj = { 'left': e.pageX - frame.left,
-//                            'top': e.pageY - frame.top,
-//                            'width': labelwidth(sig.key),
-//                            'height': 20 };
-//                constrain(obj, map_pane, 5);
-//                sig.canvas_object = obj;
-//
-//                set_sig_drag(sig);
-//                set_sig_hover(sig);
-//                redraw(1000, false);
-//            });
-//        });
-//        $(document).one('mouseup.drawing', function(e) {
-//            $(document).off('.drawing');
-//        });
-//    });
+    resetPanZoom() {
+        super.resetPanZoom();
+        this.drawMaps(0);
+    }
+
+    setCanvasTableDrag() {
+        let self = this;
+        let table = this.tables.left;
+        $('.tableDiv').off('mousedown');
+        $('.tableDiv').on('mousedown', 'td.leaf', function(e) {
+            self.escaped = false;
+            var src_row = $(this).parent('tr')[0];
+
+            $('#svgDiv').one('mouseenter.drawing', function() {
+                // move svg canvas to front
+                $('#svgDiv').css({'z-index': 2});
+
+                deselectAllMaps(self.tables);
+                var src = table.getRowFromName(src_row.id);
+                var dst = null;
+                var width = textWidth(src.id, 1.2);
+
+                // add object to canvas
+                let sig = self.database.find_signal(src.id);
+                if (!sig)
+                    return;
+
+                let p = sig.position;
+                p.left = (e.pageX - self.frame.left) * self.canvas.zoom + self.canvas.pan.x;
+                p.top = sig.position.y = (e.pageY - self.frame.top) * self.canvas.zoom + self.canvas.pan.y;
+                p.width = textWidth(sig.key, 1.2);
+                p.height = 30;
+                sig.canvasObject = {'left': p.left, 'top': p.top,
+                                    'width': p.width, 'height': p.height};
+                let c = sig.canvasObject;
+                self.drawSignal(sig, 0);
+                // remove signal from table
+                table.update();
+                self.drawMaps(0);
+
+                $('svg, .displayTable tbody tr').on('mousemove.drawing', function(e) {
+                    if (self.escaped) {
+                        $(document).off('.drawing');
+                        $('svg, .displayTable tbody tr').off('.drawing');
+                        return;
+                    }
+                    p.left = (e.pageX - self.frame.left) * self.canvas.zoom + self.canvas.pan.x;
+                    p.top = (e.pageY - self.frame.top) * self.canvas.zoom + self.canvas.pan.y;
+                    p.x = p.left + p.width * 0.5;
+                    p.y = p.top + p.height * 0.5;
+                    c.left = p.left;
+                    c.top = p.top;
+                    self.drawSignal(sig, 0);
+                    self.drawMaps(0, sig);
+                });
+                $(document).on('mouseup.drawing', function(e) {
+                    $(document).off('.drawing');
+                    $('svg, .displayTable tbody tr').off('.drawing');
+
+                    self.setSigDrag(sig);
+                    self.setSigHover(sig);
+
+                    // move svg canvas to back
+                    $('#svgDiv').css({'z-index': 0});
+                });
+            });
+            $(document).one('mouseup.drawing', function(e) {
+                $(document).off('.drawing');
+                // move svg canvas to back
+                $('#svgDiv').css({'z-index': 0});
+            });
+        });
+    }
 
     cleanup() {
         super.cleanup();
+        delete this.dragging;
+        delete this.trashing;
+
+        this.tables.left.ignoreCanvasObjects = false;
 
         // clean up any objects created only for this view
+        let self = this;
         this.database.devices.each(function(dev) {
             dev.signals.each(function(sig) {
-                if (sig.view)
-                    sig.view.undrag();
+                if (!sig.view)
+                    return;
+                sig.view.undrag();
+                if (sig.view.label) {
+                    sig.view.label.remove();
+                    sig.view.label = null;
+                }
+                // cache canvas object positions
+                // TODO: use signalPainter instead?
             });
         });
+        this.tables.left.update();
+    }
+}
+
+class CanvasMapPainter extends MapPainter
+{
+    constructor(map, canvas, frame, database) {super(map, canvas, frame, database);}
+
+    updatePaths() {
+        let dst = this.map.dst;
+        if (this.map.srcs.length === 1) {
+            // draw a curved line from src to dst
+            let src = this.map.srcs[0];
+            if (!src.canvasObject && !dst.canvasObject)
+                this.pathspecs[0] = this.vertical(src, dst);
+            else
+                this.pathspecs[0] = this.canvas_path(src, dst);
+        }
+        else {
+            let sigs = this.map.srcs.filter(s => !s.hidden).map(s => s.position);
+            sigs = sigs.concat([dst]);
+            let xavg = sigs.map(s => s.x).reduce((accum, s) => accum + s) / sigs.length;
+            let yavg = sigs.map(s => s.y).reduce((accum, s) => accum + s) / sigs.length;
+            let node = this.getNodePosition(50);
+            if (sigs.every(s => !s.canvasObject))
+                node.x += 50;
+            node.width = 0;
+            node.left = node.x;
+            node.top = node.y;
+            let i = 0;
+            for (; i < this.map.srcs.length; i++) {
+                let src = this.map.srcs[i];
+                if (src.hidden) continue;
+                this.pathspecs[i] = this.canvas_path(src, {position: node,
+                                                           canvasObject: true});
+            }
+            this.pathspecs[i] = this.canvas_path({position: node,
+                                                  canvasObject: true}, dst);
+            this.pathspecs[i+1] = this.circle_spec(node.x, node.y);
+        }
+    }
+
+    getNodePosition(offset)
+    {
+        let self = this;
+        function canvasPos(o) {
+            let x = o.position.x;
+            let y = o.position.y;
+            if (!o.canvasObject) {
+                x = x * self.canvas.zoom + self.canvas.pan.x;
+                y = y * self.canvas.zoom + self.canvas.pan.y;
+            }
+            return {x: x, y: y};
+        }
+        let dst = this.map.dst;
+        let sigs = this.map.srcs.filter(s => !s.hidden);
+        if (sigs.length === 0) return null;
+        sigs = sigs.concat([dst]);
+
+        let x = sigs.map(s => canvasPos(s).x).reduce((accum, s) => accum + s) / sigs.length;
+        let y = sigs.map(s => canvasPos(s).y).reduce((accum, s) => accum + s) / sigs.length;
+
+        if (offset) {
+            if (x === dst.x)
+                x += offset * dst.vx;
+            if (y === dst.y)
+                y += offset * dst.vy;
+        }
+
+        return {x: x, y: y};
+    }
+
+    vertical(src, dst, minoffset = 30, maxoffset = 200)
+    {
+        src = src.position;
+        dst = dst.position;
+
+        let src_x, src_cx, src_y, dst_x, dst_cx, dst_y;
+
+        let offset = Math.abs(src.y - dst.y) * 0.5;
+        if (offset > maxoffset) offset = maxoffset;
+        if (offset < minoffset) offset = minoffset;
+
+        src_x = dst_x = src.x * this.canvas.zoom + this.canvas.pan.x;
+        src_cx = dst_cx = (src.x + offset) * this.canvas.zoom + this.canvas.pan.x;
+        src_y = src.y * this.canvas.zoom + this.canvas.pan.y;
+        dst_y = dst.y * this.canvas.zoom + this.canvas.pan.y;
+
+        return [['M', src_x, src_y], ['C', src_cx, src_y, dst_cx, dst_y, dst_x, dst_y]];
+    }
+
+    canvas_path(src, dst)
+    {
+        let srcPos = src.position;
+        let dstPos = dst.position;
+        let src_x, src_cx, src_y, dst_x, dst_cx, dst_y;
+
+        if (src.canvasObject) {
+            let offset = srcPos.width * 0.5;
+            src_x = srcPos.left + offset;
+            src_cx = srcPos.left + offset * 2;
+            src_y = srcPos.top;
+        }
+        else {
+            src_x = srcPos.x * this.canvas.zoom + this.canvas.pan.x;
+            src_cx = src_x + srcPos.width * this.canvas.zoom * 0.5;
+            src_y = srcPos.y * this.canvas.zoom + this.canvas.pan.y;
+        }
+
+        if (dst.canvasObject) {
+            let offset = dstPos.width * -0.5;
+            dst_x = dstPos.left + offset;
+            dst_cx = dstPos.left + offset * 2;
+            dst_y = dstPos.top;
+        }
+        else {
+            dst_x = dstPos.x * this.canvas.zoom + this.canvas.pan.x;
+            dst_cx = dst_x + dstPos.width * this.canvas.zoom * 0.5;
+            dst_y = dstPos.y * this.canvas.zoom + this.canvas.pan.y;
+        }
+        return [['M', src_x, src_y], ['C', src_cx, src_y, dst_cx, dst_y, dst_x, dst_y]];
+    }
+
+    updateAttributes()
+    {
+        let num_srcs = this.map.srcs.length;
+        if (num_srcs > 1)
+        {
+            let hidden = true;
+            this._defaultAttributes(num_srcs + 2);
+            let i = 0;
+            for (; i < num_srcs; ++i)
+            {
+                hidden = hidden && this.map.srcs[i].hidden;
+                if (this.map.srcs[i].hidden) this.attributes[i]['stroke'] = 'none';
+                this.attributes[i]['arrow-end'] = 'none';
+            }
+
+            if (hidden)
+            {
+                this.attributes[i].stroke = 'none';
+                this.attributes[i+1].stroke = 'none';
+            }
+            else
+            {
+                this.attributes[i+1].fill = this.map.selected ?
+                MapPainter.selectedColor :
+                MapPainter.defaultColor;
+                this.attributes[i+1]['arrow-end'] = 'none'
+            }
+        }
+        else this._defaultAttributes();
     }
 }
