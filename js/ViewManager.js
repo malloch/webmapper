@@ -62,7 +62,11 @@ class ViewManager
             this.database.srcRE = text ? new RegExp(text, 'i') : new RegExp('.*');
             this.views[this.currentView].filterSignals('src');
         }
-        else {
+        else if (searchbar == 'dstSearch') {
+            this.database.dstRE = text ? new RegExp(text, 'i') : new RegExp('.*');
+            this.views[this.currentView].filterSignals('dst');
+        }
+        else { //searchbar == 'showVis' TODO: maybe add this to the dstSearch text above
             this.database.dstRE = text ? new RegExp(text, 'i') : new RegExp('.*');
             this.views[this.currentView].filterSignals('dst');
         }

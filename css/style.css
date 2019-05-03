@@ -183,7 +183,7 @@ path {
 
 .topMenu {
     background: rgba(220, 220, 220, 0.1);
-    height: 70px;
+    height: 90px;
     border-radius: 12px;
     position: relative;
     float: left;
@@ -202,9 +202,9 @@ path {
     position: relative;
     float: left;
     height: 20px;
-    width: 70px;
+    width: 90px;
     transform-origin: 0% 0%;
-    transform: translate(0px, 70px) rotate(270deg);
+    transform: translate(0px, 90px) rotate(270deg);
     color: white;
     background: rgba(220, 220, 220, 0.1);
     text-align: center;
@@ -780,7 +780,7 @@ table.infoTable tr td:first-child {
     height: calc(100% - 83px);
     float: left;
     position: absolute;
-    top: 80px;
+    top: 95px;
 }
 
 .console {

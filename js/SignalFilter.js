@@ -13,6 +13,9 @@ class SignalFilter{
                     "<div>Destinations: "+
                         "<input type='search' id='dstSearch' style='float:right; width:calc(100% - 85px);'></input>"+
                     "</div>"+
+                    "<div>Show Visualizers: "+
+                        "<input type='checkbox' id='showVis' value='none' checked></input>"+
+                    "</div>"+
                 "</div>"+
             "</div>");
         
@@ -37,6 +40,21 @@ class SignalFilter{
             input: function(e) {
                 let id = e.currentTarget.id;
                 viewManager.filterSignals(id, $('#'+id).val());
+            },
+        });
+        $('#showVis').on({
+            change: function(e) {
+                let id = e.currentTarget.id;
+                let checked = e.currentTarget.checked;
+                if (checked) {
+                    console.log('turning off filtering of inputvis');
+                    viewManager.filterSignals(id, '');
+                }
+                else {
+                    console.log('filtering out libmapper_inputvis');
+                    viewManager.filterSignals(id, '^((?!libmapper_inputvis).)*$');
+                }
+                         
             },
         });
     }
