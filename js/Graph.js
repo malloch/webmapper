@@ -36,6 +36,14 @@ NodeArray.prototype = {
         return obj;
     },
 
+    map : function(func) {
+        let res = [];
+        for (key in this.contents) {
+            res.push(func(this.contents[key]));
+        }
+        return res;
+    },
+
     reduce : function(func) {
         let key, total = null;
         for (key in this.contents) {
@@ -155,6 +163,14 @@ EdgeArray.prototype = {
             }
         }
         return obj;
+    },
+
+    map : function(func) {
+        let res = [];
+        for (key in this.contents) {
+            res.push(func(this.contents[key]));
+        }
+        return res;
     },
 
     reduce : function(func) {
