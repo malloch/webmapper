@@ -144,12 +144,12 @@ def on_signal(type, sig, action):
         server.send_command("del_signal", sig_props(sig))
 
 def on_map(type, map, action):
-#    print "on_map"
+    print "on_map"
     if action == mpr.OBJ_NEW or action == mpr.OBJ_MOD:
-#        print 'ON_MAP (added or modified)', map_props(map)
+        print 'ON_MAP (added or modified)', map_props(map)
         server.send_command("add_maps", [map_props(map)])
     elif action == mpr.OBJ_REM:
-#        print 'ON_MAP (removed)', map_props(map)
+        print 'ON_MAP (removed)', map_props(map)
         server.send_command("del_map", map_props(map))
 
 def find_sig(fullname):
@@ -182,8 +182,10 @@ def find_map(srckeys, dstkey):
 
 def set_map_properties(props, map):
     if not map:
-        print "error: couldn't retrieve map ", props['src'], " -> ", props['dst']
-        return
+        map = find_map(props['srcs'], props['dst'])
+        if not map:
+            print "error: couldn't retrieve map ", props['src'], " -> ", props['dst']
+            return
     del props['src']
     del props['dst']
     for key in props:
@@ -250,7 +252,7 @@ def set_map_properties(props, map):
 #                dst.maximum = props['dst_max']
         else:
             map[key] = val
-#    print 'pushing map'
+    print 'pushing map', map.properties()
     map.push()
 
 def on_save(arg):

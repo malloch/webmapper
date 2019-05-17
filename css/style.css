@@ -183,13 +183,20 @@ path {
 
 .topMenu {
     background: rgba(220, 220, 220, 0.1);
-    height: 70px;
+    height: 140px;
     border-radius: 12px;
     position: relative;
     float: left;
     margin-right: 5px;
     overflow: hidden;
     width: calc(100% - 40px);
+    top: -73px;
+}
+
+.topMenu.half {
+    height: 68px;
+    margin-bottom: 4px;
+    top: 0px;
 }
 
 .topMenu div {
@@ -198,17 +205,27 @@ path {
     color: white;
 }
 
+#TopMenuWrapperFile {
+    width: 320px;
+}
+
 .topMenuTitle {
     position: relative;
     float: left;
     height: 20px;
-    width: 70px;
+    width: 140px;
     transform-origin: 0% 0%;
-    transform: translate(0px, 70px) rotate(270deg);
+    transform: translate(0px, 140px) rotate(270deg);
     color: white;
     background: rgba(220, 220, 220, 0.1);
     text-align: center;
     text-decoration: bold;
+}
+
+.topMenuTitle.half {
+    width: 68px;
+    transform: translate(0px, 68px) rotate(270deg);
+    top: 0px;
 }
 
 .topMenuContainer {
@@ -746,11 +763,16 @@ table.infoTable tr td:first-child {
 /* The overall container of elements not in skeleton*/
 #container {
     width: calc(100% - 9px);
-    height: calc(100% - 110px);
-    height: calc(100% - 83px);
+/*    height: calc(100% - 110px);*/
+    height: calc(100% - 153px);
     float: left;
     position: absolute;
-    top: 80px;
+    top: 150px;
+}
+
+#container.fullScreen {
+    top: 5px;
+    height: calc(100% - 12px);
 }
 
 .console {

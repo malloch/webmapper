@@ -8,7 +8,7 @@ class MapProperties {
         this.mapProtocols = ["UDP", "TCP"];
 
         $(this.container).append(
-            "<div' class='topMenu' style='width:calc(100% - 605px);'>"+
+            "<div' class='topMenu' style='width:calc(100% - 324px);'>"+
                 "<div id='mapPropsTitle' class='topMenuTitle'><strong>MAP</strong></div>"+
                 "<div id='mapPropsDiv' style='position:absolute;left:0px;top:20px;width:100%;height:100%;'></div>"+
             "</div>");
@@ -18,8 +18,9 @@ class MapProperties {
                 "<div id='protocols' class='signalControl disabled'>Protocol: </div>"+
                 "<div id='modes' class='signalControl disabled'>Mode: </div>"+
             "</div>"+
-            "<div id='expression' class='signalControl disabled hidden' style='position:absolute;width:calc(100% - 200px);left:200px;top:-20px;height:100%;padding:5px;'>"+
-                "<textarea id='expression 'class='expression' style='width:100%;height:100%;resize:none'></textarea>"+
+            "<div id='expression' class='signalControl disabled' style='position:absolute;width:calc(100% - 200px);left:200px;top:-20px;height:100%;padding:5px;'>"+
+                "<textarea id='expression 'class='expression' style='width:50%;height:100%;resize:none;float:left;'></textarea>"+
+                "<table id='literals' style='width:50%;'><tbody></tbody></table>"+
             "</div>"+
             "<div class='hidden' id='ranges' style='position:absolute;top:-20px;width:calc(100% - 200px);padding:5px;'></div>");
         
@@ -157,11 +158,7 @@ class MapProperties {
         $('.signalControl').children('*').removeClass('disabled');
         $('.signalControl').addClass('disabled');
         $('#mapPropsTitle').addClass('disabled');
-        $('.calibrate').removeClass('calibratesel');
-        $('.setlinear').removeClass('setlinearsel');
-        $('.range').removeClass('calibratesel');
         $('.expression').removeClass('waiting');
-        $('.ranges').children('*').removeClass('waiting');
     }
 
     selected(map) {
@@ -171,80 +168,44 @@ class MapProperties {
     updateMapProperties() {
         this.clearMapProperties();
 
-        var mode = null;
         var proto = null;
         var expression = null;
-        var src_min = null;
-        var src_max = null;
-        var dst_min = null;
-        var dst_max = null;
-        var src_calibrating = null;
-        var dst_calibrating = null;
+        var vars = {};
 
-        this.graph.maps.filter(this.selected).each(function(map) {
-            if (mode == null)
-                mode = map.mode;
-            else if (mode != map.mode)
-                mode = 'multiple'
+        let selected = this.graph.maps.filter(m => m.selected);
+        console.log('selected:', selected.size(), selected);
 
-            if (proto == null)
-                proto = map.protocol;
-            else if (proto != map.protocol)
-                proto = 'multiple';
-
-            if (expression == null)
-                expression = map.expression;
-            else if (expression != map.expression)
-                expression = 'multiple expressions';
-
-            if (src_min == null)
-                src_min = map.src_min;
-            else if (src_min != map.src_min)
-                src_min = 'multiple';
-            if (src_max == null)
-                src_max = map.src_max;
-            else if (src_max != map.src_max)
-                src_max = 'multiple';
-            if (src_calibrating == null)
-                src_calibrating = map.src_calibrating;
-            else if (src_calibrating != map.src_calibrating)
-                src_calibrating = 'multiple';
-
-            if (dst_min == null)
-                dst_min = map.dst_min;
-            else if (dst_min != map.dst_min)
-                dst_min = 'multiple';
-            if (dst_max == null)
-                dst_max = map.dst_max;
-            else if (dst_max != map.dst_max)
-                dst_max = 'multiple';
-            if (dst_calibrating == null)
-                dst_calibrating = map.dst_calibrating;
-            else if (dst_calibrating != map.dst_calibrating)
-                dst_calibrating = 'multiple';
-        });
-
-        if (mode != null) {
+        if (selected && selected.size()) {
             // something has been selected
             $('#mapPropsTitle').removeClass('disabled');
             $('.signalControl').removeClass('disabled');
             $('.signalControl').children('*').removeClass('disabled');
         }
+        else
+            return;
 
-        if (mode != null && mode != 'multiple') {
-            // capitalize first letter of mode
-            console.log('mode:', mode);
-            mode = mode.charAt(0).toUpperCase() + mode.slice(1);
-            $("#mode"+mode).addClass("sel");
-            if (mode == 'Linear') {
-                $("#expression").addClass('hidden');
-                $("#ranges").removeClass('hidden');
+        selected.each(function(map) {
+            if (proto == null)
+                proto = map.protocol;
+            else if (proto != map.protocol)
+                proto = 'multiple';
+            if (expression == null)
+                expression = map.expr;
+            else if (expression != map.expr)
+                expression = 'multiple expressions';
+
+            for (let prop in map) {
+                if (!map.hasOwnProperty(prop))
+                    continue;
+                if (!prop.startsWith("var@"))
+                    continue;
+                let key = prop.slice(4);
+                if (vars[key] == undefined)
+                    vars[key] = map[prop];
+                else
+                    vars[key] = 'multiple values';
             }
-            else {
-                $("#ranges").addClass('hidden');
-                $("#expression").removeClass('hidden');
-            }
-        }
+        });
 
         if (proto != null && proto != 'multiple') {
             $("#proto"+proto).addClass("sel");
@@ -261,46 +222,11 @@ class MapProperties {
                 $(".expression").css({'font-style': 'normal'});
         }
 
-        if (src_min != null) {
-            $("#src_min").removeClass('waiting');
-            if (src_min != 'multiple')
-                $("#src_min").val(src_min);
-        }
-        if (src_max != null) {
-            $("#src_max").removeClass('waiting');
-            if (src_max != 'multiple')
-                $("#src_max").val(src_max);
-        }
-        if (dst_min != null) {
-            $("#dst_min").removeClass('waiting');
-            if (dst_min != 'multiple')
-                $("#dst_min").val(dst_min);
-        }
-        if (dst_max != null) {
-            $("#dst_max").removeClass('waiting');
-            if (dst_max != 'multiple')
-                $("#dst_max").val(dst_max);
-        }
-
-        if (src_calibrating == true) {
-            $("#srcCalibrate").addClass("calibratesel");
-            $("#src_min").addClass("calibratesel");
-            $("#src_max").addClass("calibratesel");
-        }
-        else if (src_calibrating == false) {
-            $("#srcCalibrate").removeClass("calibratesel");
-            $("#src_min").removeClass("calibratesel");
-            $("#src_max").removeClass("calibratesel");
-        }
-        if (dst_calibrating == true) {
-            $("#dstCalibrate").addClass("calibratesel");
-            $("#dst_min").addClass("calibratesel");
-            $("#dst_max").addClass("calibratesel");
-        }
-        else if (dst_calibrating == false) {
-            $("#dstCalibrate").removeClass("calibratesel");
-            $("#dst_min").removeClass("calibratesel");
-            $("#dst_max").removeClass("calibratesel");
+        console.log('adding vars:', vars);
+        let literals = $("#literals");
+        literals.empty();
+        for (let key in vars) {
+            literals.append("<tr><td>"+key+": "+vars[key]+"</td></tr>");
         }
     }
 
@@ -323,26 +249,11 @@ class MapProperties {
 
             // set the property being modified
             switch (key) {
-            case 'mode':
-                msg['mode'] = modes[value];
-                break;
             case 'protocol':
                 msg['protocol'] = value;
                 break;
             case 'srcCalibrate':
                 msg['src_calibrating'] = !map.src_calibrating;
-                break;
-            case 'srcRangeSwitch':
-                msg['src_max'] = String(map['src_min']);
-                msg['src_min'] = String(map['src_max']);
-                $("#src_max").addClass('waiting');
-                $("#src_min").addClass('waiting');
-                break;
-            case 'dstRangeSwitch':
-                msg['dst_max'] = String(map['dst_min']);
-                msg['dst_min'] = String(map['dst_max']);
-                $("#dst_max").addClass('waiting');
-                $("#dst_min").addClass('waiting');
                 break;
             case 'muted':
                 msg['muted'] = !map['muted'];
@@ -354,31 +265,6 @@ class MapProperties {
                 msg['expression'] = value;
                 $(".expression").addClass('waiting');
                 break;
-            case 'src_min':
-                if (value == map.src_min)
-                    return;
-                msg['src_min'] = value;
-                $("#src_min").addClass('waiting');
-                break;
-            case 'src_max':
-                if (value == map.src_max)
-                    return;
-                msg['src_max'] = value;
-                $("#src_max").addClass('waiting');
-                break;
-            case 'dst_min':
-                if (value == map.dst_min)
-                    return;
-                msg['dst_min'] = value;
-                $("#dst_min").addClass('waiting');
-                break;
-            case 'dst_max':
-                if (value == map.dst_max)
-                    return;
-                msg['dst_max'] = value;
-                $("#dst_max").addClass('waiting');
-                break;
-
             default:
                 msg[key] = value;
             }
@@ -389,6 +275,7 @@ class MapProperties {
             msg['dst'] = map['dst'].key;
 
             // send the command, should receive a /mapped message after.
+            console.log('sending set_map', msg);
             command.send("set_map", msg);
         });
     }

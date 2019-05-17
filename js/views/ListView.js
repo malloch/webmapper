@@ -52,6 +52,7 @@ class ListView extends View {
     }
 
     _resize(duration) {
+        super._resize();
         let self = this;
         this.tables.left.adjust(0, 0, this.frame.width * 0.4, this.frame.height, 0,
                                 duration);

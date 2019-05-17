@@ -279,7 +279,7 @@ class ConsoleView extends View {
                             });
                         }
                         else if (command.length == 3)
-                            mapper.unmap(command[1], command[2]);
+                            mapper.unmap([command[1]], command[2]);
                         else
                             this.echo('unmap: wrong number of arguments');
                         break;

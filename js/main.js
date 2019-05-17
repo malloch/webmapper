@@ -8,6 +8,7 @@ var saverLoader;
 var netSelector;
 var viewSelector;
 var tooltip;
+var menusHidden = false;
 
 window.onload = init;           // Kick things off
 
@@ -73,16 +74,16 @@ function init() {
                                   tooltip);
 
     // init the top menu
-    $('#TopMenuWrapper').empty()
-    saverLoader = new SaverLoader(document.getElementById("TopMenuWrapper"),
+    $('#TopMenuWrapper').empty().append("<div id='TopMenuWrapperFile'></div>")
+    saverLoader = new SaverLoader(document.getElementById("TopMenuWrapperFile"),
                                   graph, viewManager);
-    viewSelector = new ViewSelector(document.getElementById("TopMenuWrapper"),
+    netSelector = new NetworkSelector(document.getElementById("TopMenuWrapperFile"),
+                                      graph, viewManager);
+    viewSelector = new ViewSelector(document.getElementById("TopMenuWrapperFile"),
                                     viewManager);
-    sigFilter = new SignalFilter(document.getElementById("TopMenuWrapper"),
+    sigFilter = new SignalFilter(document.getElementById("TopMenuWrapperFile"),
                                  graph, viewManager);
     mapProperties = new MapProperties(document.getElementById("TopMenuWrapper"),
-                                      graph, viewManager);
-    netSelector = new NetworkSelector(document.getElementById("TopMenuWrapper"),
                                       graph, viewManager);
 
     // init controller
@@ -141,6 +142,22 @@ function initMonitorCommands() {
     });
 }
 
+function toggleMenus() {
+    if (menusHidden) {
+        console.log('showing menus');
+        $('#TopMenuWrapper').removeClass('hidden');
+        $('#container').removeClass('fullScreen');
+        menusHidden = false;
+    }
+    else {
+        console.log('hiding menus');
+        $('#TopMenuWrapper').addClass('hidden');
+        $('#container').addClass('fullScreen');
+        menusHidden = true;
+    }
+    viewManager.on_resize();
+}
+
 /**
  * initialize the event listeners for events triggered by the views
  */
@@ -149,6 +166,13 @@ function initViewCommands()
     $('body').on('keydown.list', function(e) {
         if (e.metaKey != true) {
             switch (e.which) {
+                case 32:
+                    if (viewManager.currentView == 'console')
+                        break;
+                    // space: show/hide menus
+                    e.preventDefault();
+                    toggleMenus()
+                    break;
                 case 37:
                     // pan left
                     e.preventDefault();

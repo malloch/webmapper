@@ -141,9 +141,9 @@ class View {
     }
 
     showDevLabel(self, dev, e) {
-        let hidden = self.database.devices.map(d => d.hidden ? 1 : 0)
-                                          .reduce((a, h) => a + h);
-        let size = self.database.devices.size();
+        let hidden = self.graph.devices.map(d => d.hidden ? 1 : 0)
+                                       .reduce((a, h) => a + h);
+        let size = self.graph.devices.size();
         let action;
         if (hidden == 0)
             action = "solo";

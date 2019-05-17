@@ -46,8 +46,8 @@ class SaverLoader {
         });
 
         $(container).append(
-            "<div id='saverLoaderDiv' class='topMenu' style='width:75px;'>"+
-                "<div class='topMenuTitle'><strong>FILE</strong></div>"+
+            "<div id='saverLoaderDiv' class='topMenu half' style='width:75px;'>"+
+                "<div class='topMenuTitle half'><strong>FILE</strong></div>"+
                 "<div class='topMenuContainer'>"+
                     "<div id='saveButton'>Save</div>"+
                     "<div id='loadButton'>Open</div>"+

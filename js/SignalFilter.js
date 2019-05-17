@@ -4,14 +4,14 @@ class SignalFilter{
         this.graph = graph;
         this.viewManager = viewManager;
         $(this.container).append(
-            "<div id='signalFilterDiv' class='topMenu' style='width:275px'>"+
-                "<div class='topMenuTitle'><strong>FILTER</strong></div>"+
+            "<div id='signalFilterDiv' class='topMenu half' style='width:310px'>"+
+                "<div class='topMenuTitle half'><strong>FILTER</strong></div>"+
                 "<div class='topMenuContainer'>"+
                     "<div>Sources: "+
-                        "<input type='search' id='srcSearch' style='float:right; width:calc(100% - 85px);'></input>"+
+                        "<input type='search' id='srcSearch' style='width:calc(100% - 85px);float:right');'></input>"+
                     "</div>"+
                     "<div>Destinations: "+
-                        "<input type='search' id='dstSearch' style='float:right; width:calc(100% - 85px);'></input>"+
+                        "<input type='search' id='dstSearch' style='width:calc(100% - 85px);float:right'></input>"+
                     "</div>"+
                 "</div>"+
             "</div>");

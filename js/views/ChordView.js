@@ -183,9 +183,9 @@ class ChordView extends View {
                 // 'solo' this device by hiding all others
                 self.graph.devices.each(d => d.hidden = (d !== dev));
             }
-            else if (hidden === self.database.devices.size() - 1) {
+            else if (hidden === self.graph.devices.size() - 1) {
                 // unhide all devices
-                self.database.devices.each(d => d.hidden = false);
+                self.graph.devices.each(d => d.hidden = false);
             }
             else
                 dev.hidden = true;
