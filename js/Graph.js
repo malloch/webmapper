@@ -540,7 +540,7 @@ function Graph() {
                 map.dst_max = map.destinations[0].max;
             delete map.sources;
             delete map.destinations;
-            map.src = src;
+            map.srcs = [src];
             map.dst = dst;
             map.status = 'offline';
             if (map.expression) {
@@ -757,7 +757,7 @@ function Graph() {
                 map.dst_max = map.destinations[0].maximum;
             delete map.sources;
             delete map.destinations;
-            map.src = src;
+            map.srcs = [src];
             map.dst = dst;
             //map.status = 'offline'; //
             if (map.expression) {
