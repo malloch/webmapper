@@ -49,6 +49,16 @@ class View {
         this.origin = [this.mapPane.cx, this.mapPane.cy];
 
         this.sigLabel = null;
+
+        if (this.canvas.waiting === undefined) {
+            this.canvas.waiting = this.canvas.text(this.mapPane.cx, this.mapPane.cy, "")
+                                             .attr({'font-size': 100,
+                                                    'opacity': 0.25,
+                                                    'fill': 'white',
+                                                    'x': this.mapPane.cx,
+                                                    'y': this.mapPane.cy});
+            this.canvas.waiting.node.setAttribute('pointer-events', 'none');
+        }
     }
 
     // Subclasses should override the behavior of _resize rather than this one
@@ -60,6 +70,8 @@ class View {
         this._resize(duration);
         this.canvas.setViewBox(0, 0, this.frame.width, this.frame.height, false);
         this.draw(duration);
+        this.canvas.waiting.attr({'x': this.mapPane.cx,
+                                  'y': this.mapPane.cy});
     }
 
     // Define subclass specific resizing related tasks
@@ -79,6 +91,12 @@ class View {
             if (!this.tables[i].hidden)
                 this.tables[i].update();
         }
+
+        if (this.graph.devices.size() == 0) {
+            this.canvas.waiting.attr({'text': 'waiting for devices'});
+            return;
+        }
+        this.canvas.waiting.attr({'text': ''});
 
         let self = this;
         let devIndex = 0;

@@ -47,14 +47,6 @@ class ChordView extends View {
         // remove associated svg elements for maps
         this.graph.maps.each(function(map) { remove_object_svg(map); });
 
-        this.devCount = this.canvas.text(this.mapPane.cx, this.mapPane.cy, " ")
-                                   .attr({'font-size': 200,
-                                          'opacity': 0.25,
-                                          'fill': 'white',
-                                          'x': this.mapPane.cx,
-                                          'y': this.mapPane.cy});
-        this.devCount.node.setAttribute('pointer-events', 'none');
-
         this.updateDevices();
         this.resize();
     }
@@ -68,9 +60,6 @@ class ChordView extends View {
         this.mapPane.cy = this.frame.height * 0.5;
 
         this.radius = Math.min(this.frame.width, this.frame.height) * 0.25;
-
-        this.devCount.attr({'x': this.mapPane.cx,
-                            'y': this.mapPane.cy});
     }
 
     gap(numDevs) {
@@ -78,12 +67,16 @@ class ChordView extends View {
     }
 
     updateDevices() {
+        let dev_num = this.graph.devices.size();
+        if (dev_num == 0) {
+            this.canvas.waiting.attr({'text': 'waiting for devices'});
+            return;
+        }
+        this.canvas.waiting.attr({'text': ''});
+
         let self = this;
         this.onlineDevs = 0;
         this.offlineDevs = 0;
-        let dev_num = this.graph.devices.size();
-        if (dev_num < 1)
-            return;
         this.graph.devices.each(function(dev) {
             if (dev.status == 'offline')
                 self.offlineDevs++;
@@ -609,12 +602,6 @@ class ChordView extends View {
         let updated = false;
         if (elements.indexOf('devices') >= 0) {
             this.updateDevices();
-            if (this.onlineDevs)
-                this.devCount.attr({'text': this.onlineDevs,
-                                    'font-size': 200}).toBack();
-            else
-                this.devCount.attr({'text': 'waiting for devices',
-                                    'font-size': 100});
             updated = true;
         }
         if (elements.indexOf('links') >= 0) {
@@ -632,8 +619,6 @@ class ChordView extends View {
 
     cleanup() {
         super.cleanup();
-        if (this.devCount)
-            this.devCount.remove();
         graph.links.each(function(link) {
             if (!link.view)
                 return;

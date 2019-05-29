@@ -675,6 +675,12 @@ class GraphView extends View {
                 break;
         }
         let updated = false;
+        if (elements.indexOf('devices') >= 0) {
+            if (this.graph.devices.size() == 0)
+                this.canvas.waiting.attr({'text': 'waiting for devices'});
+            else
+                this.canvas.waiting.attr({'text': ''});
+        }
         if (elements.indexOf('signals') >= 0) {
             this.updateSignals(function(sig) {
                 if (!sig.position) {
