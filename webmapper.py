@@ -186,8 +186,12 @@ def set_map_properties(props, map):
         if not map:
             print "error: couldn't retrieve map ", props['src'], " -> ", props['dst']
             return
-    del props['src']
-    del props['dst']
+    if 'src' in props:
+        del props['src']
+    if 'srcs' in props:
+        del props['srcs']
+    if 'dst' in props:
+        del props['dst']
     for key in props:
         print 'prop', key, props[key]
         val = props[key]
@@ -202,57 +206,8 @@ def set_map_properties(props, map):
         elif key == 'muted':
             if val == True or val == False:
                 map[mpr.PROP_MUTED] = val
-#        elif key is 'src_min':
-#            if type(props['src_min']) is int or type(props['src_min']) is float:
-#                src.minimum = float(props['src_min'])
-#            else:
-#                if type(props['src_min']) is str:
-#                    props['src_min'] = props['src_min'].replace(',',' ').split()
-#                numargs = len(props['src_min'])
-#                for i in range(numargs):
-#                    props['src_min'][i] = float(props['src_min'][i])
-#                if numargs == 1:
-#                    props['src_min'] = props['src_min'][0]
-#                src.minimum = props['src_min']
-#        elif key is 'src_max':
-#            if type(props['src_max']) is int or type(props['src_max']) is float:
-#                src.maximum = float(props['src_max'])
-#            else:
-#                if type(props['src_max']) is str:
-#                    props['src_max'] = props['src_max'].replace(',',' ').split()
-#                numargs = len(props['src_max'])
-#                for i in range(numargs):
-#                    props['src_max'][i] = float(props['src_max'][i])
-#                if numargs == 1:
-#                    props['src_max'] = props['src_max'][0]
-#                dst.maximum = props['src_max']
-#        elif key is 'dst_min':
-#            if type(props['dst_min']) is int or type(props['dst_min']) is float:
-#                dst.minimum = float(props['dst_min'])
-#            else:
-#                if type(props['dst_min']) is str:
-#                    props['dst_min'] = props['dst_min'].replace(',',' ').split()
-#                numargs = len(props['dst_min'])
-#                for i in range(numargs):
-#                    props['dst_min'][i] = float(props['dst_min'][i])
-#                if numargs == 1:
-#                    props['dst_min'] = props['dst_min'][0]
-#                dst.minimum = props['dst_min']
-#        elif key is 'dst_max':
-#            if type(props['dst_max']) is int or type(props['dst_max']) is float:
-#                dst.maximum = float(props['dst_max'])
-#            else:
-#                if type(props['dst_max']) is str:
-#                    props['dst_max'] = props['dst_max'].replace(',',' ').split()
-#                numargs = len(props['dst_max'])
-#                for i in range(numargs):
-#                    props['dst_max'][i] = float(props['dst_max'][i])
-#                if numargs == 1:
-#                    props['dst_max'] = props['dst_max'][0]
-#                dst.maximum = props['dst_max']
         else:
             map[key] = val
-    print 'pushing map', map.properties()
     map.push()
 
 def on_save(arg):

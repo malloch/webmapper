@@ -166,7 +166,7 @@ class ConvergentMapper
             case this.method.default:
             default:
         }
-        if (expr !== null) this._converge(srckey, dstmap, {expression: expr});
+        if (expr !== null) this._converge(srckey, dstmap, {expr: expr});
         else this._converge(srckey, dstmap);
     }
 
@@ -247,7 +247,7 @@ class ConvergentMapper
             return;
         }
 
-        let expr = dstmap.expression.substring(2);
+        let expr = dstmap.expr.substring(2);
         if (dstmap.srcs.length == 1) expr = ConvExpr.replace(expr, 'x', 'x0');
         return [src, dst, expr];
     }

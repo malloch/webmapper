@@ -23,8 +23,8 @@ class File {
             if (c.mute != null)
                 map.muted = c.mute ? true : false;
             if (c.expression != null)
-                map.expression = c.expression.replace('s[', 'src[')
-                                             .replace('d[', 'dst[');
+                map.expr = c.expression.replace('s[', 'src[')
+                                       .replace('d[', 'dst[');
             if (c.srcMin != null)
                 src.minimum = c.srcMin;
             if (c.srcMax != null)
@@ -35,8 +35,7 @@ class File {
                 dst.maximum = c.dstMax;
 
             if (c.mode == 'reverse') {
-                map.mode = 'expression';
-                map.expression = 'y=x';
+                map.expr = 'y=x';
                 map.sources = [dst];
                 map.destinations = [src];
             }
@@ -180,10 +179,10 @@ class File {
         for (var i in staged_file.maps) {
             let map = staged_file[i];
             // fix expression
-            if (map.expression) {
+            if (map.expr) {
                 // TODO: better regexp to avoid conflicts with user vars
-                map.expression = map.expression.replace(/src/g, "x");
-                map.expression = map.expression.replace(/dst/g, "y");
+                map.expr = map.expr.replace(/src/g, "x");
+                map.expr = map.expr.replace(/dst/g, "y");
             }
 
             // TODO: extend to support convergent maps

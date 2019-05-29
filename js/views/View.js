@@ -493,7 +493,7 @@ class View {
                             source: map.srcs.map(s => s.key).join(', '),
                             destination: map.dst.key,
                             mode: map.mode,
-                            expression: map.expression,
+                            expression: map.expr,
                         }, e.x, e.y);
                 }
                 map.view.highlight();

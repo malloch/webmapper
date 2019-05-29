@@ -3,8 +3,6 @@ class MapProperties {
         this.container = container;
         this.graph = graph;
         this.view = view;
-        this.mapModeCommands = {"Linear": 'linear', "Expression": 'expression' };
-        this.mapModes = ["Linear", "Expression"];
         this.mapProtocols = ["UDP", "TCP"];
 
         $(this.container).append(
@@ -68,23 +66,6 @@ class MapProperties {
             command.send("select_network", e.currentTarget.value);
         });
 
-        // The range input handler
-        $('.topMenu').on({
-            keydown: function(e) {
-                e.stopPropagation();
-                if (e.which == 13 || e.which == 9) { //'enter' or 'tab' key
-                    self.setMapProperty($(this).attr('id').split(' ')[0],
-                                         this.value);
-                }
-            },
-            click: function(e) { e.stopPropagation(); },
-            focusout: function(e) {
-                e.stopPropagation();
-                self.setMapProperty($(this).attr('id').split(' ')[0],
-                                    this.value);
-            },
-        }, 'input');
-
         // The expression input handler
         $('.topMenu').on({
             keydown: function(e) {
@@ -92,8 +73,7 @@ class MapProperties {
                 if (e.which == 13) { //'enter' key
                     if (counter >= 1) {
                         console.log('sending updated expression');
-                        self.setMapProperty($(this).attr('id').split(' ')[0],
-                                            this.value);
+                        self.setMapProperty('expr', this.value);
                          counter = 0;
                     }
                     else
@@ -110,25 +90,9 @@ class MapProperties {
             },
         }, 'textarea');
 
-        //For the mode buttons
-        $('.topMenu').on("click", '.mode', function(e) {
-            e.stopPropagation();
-            self.setMapProperty("mode", e.currentTarget.innerHTML);
-        });
-
         $('.topMenu').on("click", '.protocol', function(e) {
             e.stopPropagation();
             self.setMapProperty("protocol", e.currentTarget.innerHTML);
-        });
-
-        $('.rangeSwitch').click(function(e) {
-            e.stopPropagation();
-            self.setMapProperty(e.currentTarget.id, null);
-        });
-
-        $('.calibrate').click(function(e) {
-            e.stopPropagation();
-            self.setMapProperty(e.currentTarget.id, null);
         });
 
         $('body').on('keydown', function(e) {
@@ -169,11 +133,10 @@ class MapProperties {
         this.clearMapProperties();
 
         var proto = null;
-        var expression = null;
+        var expr = null;
         var vars = {};
 
         let selected = this.graph.maps.filter(m => m.selected);
-        console.log('selected:', selected.size(), selected);
 
         if (selected && selected.size()) {
             // something has been selected
@@ -189,10 +152,10 @@ class MapProperties {
                 proto = map.protocol;
             else if (proto != map.protocol)
                 proto = 'multiple';
-            if (expression == null)
-                expression = map.expr;
-            else if (expression != map.expr)
-                expression = 'multiple expressions';
+            if (expr == null)
+                expr = map.expr;
+            else if (expr != map.expr)
+                expr = 'multiple expressions';
 
             for (let prop in map) {
                 if (!map.hasOwnProperty(prop))
@@ -211,12 +174,12 @@ class MapProperties {
             $("#proto"+proto).addClass("sel");
         }
 
-        if (expression != null) {
+        if (expr != null) {
             $(".expression").removeClass('waiting');
-            expression = expression.replace(/;;/, '');
-            expression = expression.replace(/;/g, ';\n');
-            $(".expression").val(expression);
-            if (expression == 'multiple expressions')
+            expr = expr.replace(/;;/, '');
+            expr = expr.replace(/;/g, ';\n');
+            $(".expression").val(expr);
+            if (expr == 'multiple expressions')
                 $(".expression").css({'font-style': 'italic'});
             else
                 $(".expression").css({'font-style': 'normal'});
@@ -249,20 +212,14 @@ class MapProperties {
 
             // set the property being modified
             switch (key) {
-            case 'protocol':
-                msg['protocol'] = value;
-                break;
-            case 'srcCalibrate':
-                msg['src_calibrating'] = !map.src_calibrating;
-                break;
             case 'muted':
                 msg['muted'] = !map['muted'];
                 break;
-            case 'expression':
+            case 'expr':
                 value = value.replace(/\r?\n|\r/g, '');
-                if (value == map.expression)
+                if (value == map.expr)
                     return;
-                msg['expression'] = value;
+                msg['expr'] = value;
                 $(".expression").addClass('waiting');
                 break;
             default:

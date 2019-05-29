@@ -463,7 +463,7 @@ function Graph() {
                 if (c.mute != null)
                     map.muted = c.mute ? true : false;
                 if (c.expression != null)
-                    map.expression = c.expression.replace('s[', 'src[')
+                    map.expr = c.expression.replace('s[', 'src[')
                     .replace('d[', 'dst[');
                 if (c.srcMin != null)
                     src.minimum = c.srcMin;
@@ -475,8 +475,7 @@ function Graph() {
                     dst.maximum = c.dstMax;
 
                 if (c.mode == 'reverse') {
-                    map.mode = 'expression';
-                    map.expression = 'y=x';
+                    map.expr = 'y=x';
                     map.sources = [dst];
                     map.destinations = [src];
                 }
@@ -543,11 +542,11 @@ function Graph() {
             map.srcs = [src];
             map.dst = dst;
             map.status = 'offline';
-            if (map.expression) {
+            if (map.expr) {
                 // fix expression
                 // TODO: better regexp to avoid conflicts with user vars
-                map.expression = map.expression.replace(/src/g, "x");
-                map.expression = map.expression.replace(/dst/g, "y");
+                map.expr = map.expr.replace(/src/g, "x");
+                map.expr = map.expr.replace(/dst/g, "y");
             }
             console.log("loaded map src: ", src, " dst: ", dst);
             this.maps.add(map);
@@ -614,15 +613,15 @@ function Graph() {
                     case 'srcs':
                     case 'dst':
                         break;
-                    case 'expression':
+                    case 'expr':
                         // need to replace x and y variables with signal references
                         // TODO: better regexp to avoid conflicts with user vars
-                        let expr = map.expression;
+                        let expr = map.expr;
                         expr = expr.replace(/y\[/g, "dst[");
                         expr = expr.replace(/y\s*=/g, "dst=");
                         expr = expr.replace(/x\[/g, "src[");
                         expr = expr.replace(/\bx(?!\w)/g, "src[0]");
-                        m.expression = expr;
+                        m.expr = expr;
                         break;
                     case 'process_location':
                         let loc = map[attr];
@@ -686,9 +685,9 @@ function Graph() {
                 if (c.mute != null)
                     map.muted = c.mute ? true : false;
                 if (c.expression != null)
-                    map.expression = c.expression.replace('s[', 'src[')
-                    .replace('d[', 'dst[')
-                    .replace('dest[', 'dst[');
+                    map.expr = c.expression.replace('s[', 'src[')
+                                           .replace('d[', 'dst[')
+                                           .replace('dest[', 'dst[');
                 if (c.srcMin != null)
                     src.minimum = c.srcMin;
                 if (c.srcMax != null)
@@ -699,8 +698,7 @@ function Graph() {
                     dst.maximum = c.dstMax;
 
                 if (c.mode == 'reverse') {
-                    map.mode = 'expression';
-                    map.expression = 'y=x';
+                    map.expr = 'y=x';
                     map.sources = [dst];
                     map.destinations = [src];
                 }
@@ -760,14 +758,14 @@ function Graph() {
             map.srcs = [src];
             map.dst = dst;
             //map.status = 'offline'; //
-            if (map.expression) {
+            if (map.expr) {
                 // fix expression
                 // TODO: better regexp to avoid conflicts with user vars
-                map.expression = map.expression.replace('src[0]', "x")
-                                               .replace('dst[0]', "y")
-                                               .replace('dst', "y");
+                map.expr = map.expr.replace('src[0]', "x")
+                                   .replace('dst[0]', "y")
+                                   .replace('dst', "y");
             }
-            console.log(map.expression)
+            console.log(map.expr)
 
             srcs = srcs.map(s => s.slice(s.indexOf('/')));
             src = src.slice(src.indexOf('/'));
