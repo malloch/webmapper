@@ -13,46 +13,15 @@ class MapProperties {
 
         $('#mapPropsDiv').append(
             "<div class='topMenuContainer' style='width:190px;height:100%;'>"+
-                "<div id='protocols' class='signalControl disabled'>Protocol: </div>"+
-                "<div id='modes' class='signalControl disabled'>Mode: </div>"+
+                "<div id='protocols' class='signalControl disabled'>Protocol: "+
+                    "<div class='protocol' id='protoUDP'>UDP</div>"+
+                    "<div class='protocol' id='protoTCP' style='color:yellow;'>TCP</div>"+
+                "</div>"+
             "</div>"+
             "<div id='expression' class='signalControl disabled' style='position:absolute;width:calc(100% - 200px);left:200px;top:-20px;height:100%;padding:5px;'>"+
-                "<textarea id='expression 'class='expression' style='width:50%;height:100%;resize:none;float:left;'></textarea>"+
-                "<table id='literals' style='width:50%;'><tbody></tbody></table>"+
-            "</div>"+
-            "<div class='hidden' id='ranges' style='position:absolute;top:-20px;width:calc(100% - 200px);padding:5px;'></div>");
-        
-        //Add the mode controls
-        for (var m in this.mapModes) {
-            $('#modes').append(
-                "<div class='mode' id='mode"+this.mapModes[m]+"'>"+this.mapModes[m]+"</div>");
-        }
-
-        //Add the protocol controls
-        for (var p in this.mapProtocols) {
-            $('#protocols').append(
-                "<div class='protocol' id='proto"+this.mapProtocols[p]+"'>"+this.mapProtocols[p]+"</div>");
-        }
-
-        //Add the range controls
-        $('#ranges').append(
-            "<div id='srcRange' class='range signalControl disabled'>"+
-                "<div style='width:80px'>Src Range:</div>"+
-                "<div style='width:calc(100% - 120px)'>"+
-                    "<input class='range' id='src_min' style='width:calc(50% - 14px)'></input>"+
-                    "<div id='srcRangeSwitch' class='rangeSwitch'></div>"+
-                    "<input class='range' id='src_max' style='width:calc(50% - 14px)'></input>"+
+                "<div style='width:100%;height:100%;float:left;background:white;padding:2px;border:1px solid gray;overflow:scroll'>"+
+                    "<table id='exprTable'><tbody></tbody></table>"+
                 "</div>"+
-                "<div id='setLinear' class='setlinear'>Linear</div>"+
-            "</div>"+
-            "<div id='dstRange' class='range signalControl disabled'>"+
-                "<div style='width:80px'>Dest Range:</div>"+
-                "<div style='width:calc(100% - 120px)'>"+
-                    "<input class='range' id='dst_min' style='width:calc(50% - 14px)'></input>"+
-                    "<div id='dstRangeSwitch' class='rangeSwitch'></div>"+
-                    "<input class='range' id='dst_max' style='width:calc(50% - 14px)'></input>"+
-                "</div>"+
-                "<div id='srcCalibrate' class='calibrate'>Calib</div>"+
             "</div>");
 
         this._addHandlers();
@@ -70,25 +39,119 @@ class MapProperties {
         $('.topMenu').on({
             keydown: function(e) {
                 e.stopPropagation();
-                if (e.which == 13) { //'enter' key
-                    if (counter >= 1) {
-                        console.log('sending updated expression');
-                        self.setMapProperty('expr', this.value);
-                         counter = 0;
-                    }
-                    else
-                        counter += 1;
+                if (e.metaKey == true) {
+                    $(e.currentTarget).parent('div').css({background: 'red'});
                 }
-                else
-                    counter = 0;
+                switch (e.which) {
+                    case 37:
+                    case 38:
+                    case 39:
+                    case 40:
+                        break;
+                    case 13: //'enter' key
+                    {
+                        console.log('table.enter', e);
+                        e.preventDefault();
+                        if (e.metaKey == true) {
+                            // send changes to graph
+                            // first check if only literals were changed
+                            let trs = $('#exprTable tbody').children('tr').filter('.edited');
+                            let numbers = /^[-+]?[0-9]+\.[0-9]+$/;
+                            let literals_only = true;
+                            function asNumberOrArray(s) {
+                                if (s[0] == '[') {
+                                    // treat as array
+                                    s = s.slice[1,s.length-1]
+                                    let a = s.split(',').map(Number);
+                                    if (a.some(v => v != v)) {
+                                        console.log("value array", a, "contains NaN!");
+                                        return null;
+                                    }
+                                    return a;
+                                }
+                                let v = Number(s);
+                                if (v != v) {
+                                    console.log("value", v, "== NaN!");
+                                    return null;
+                                }
+                            }
+                            for (let i=0; i < trs.length; i++) {
+                                let rhs = $(trs[i]).children('td').eq(2).text();
+                                console.log('testing subexpr rhs', rhs);
+                                if (asNumberOrArray(rhs) == null) {
+                                    literals_only = false
+                                    break;
+                                }
+                            }
+                            if (literals_only) {
+                                for (let i=0; i < trs.length; i++) {
+                                    let key = $(trs[i]).children('td').eq(0).text();
+                                    let value = $(trs[i]).children('td').eq(2).text();
+                                    value = asNumberOrArray(value);
+                                    console.log('edited literal', key, value);
+                                    self.setMapProperty('var@'+key, value);
+                                }
+                            }
+                            else {
+                                // need to concatenate entire table and send
+                                trs = $('#exprTable tbody').children('tr');
+                                let str = "";
+                                for (let i = 1; i < trs.length; i++) {
+                                    let key = $(trs[i]).children('td').eq(0).text();
+                                    let value = $(trs[i]).children('td').eq(2).text();
+                                    str += key+'='+value+';';
+                                }
+                                console.log('edited expr', str);
+                                self.setMapProperty('expr', str);
+                            }
+                        }
+                        break;
+                    }
+                    case 27: // 'escape' key
+                    {
+                        e.preventDefault();
+                        break;
+                    }
+                    case 187:
+                    {
+                        e.preventDefault();
+                        // '=' key
+                             console.log('e.target.cellIndex:', e.target.cellIndex);
+                        if (e.target.cellIndex != 0)
+                             return;
+                        $(e.target).parent('tr').append("<td>=</td><td class='rhs' contenteditable=true></td><td class='value'></td>");
+                        break;
+                    }
+                    case 9:
+                    {
+                        // 'tab' key
+                        if (e.target.cellIndex == 2) {
+                             // add another row to table
+                             $(e.currentTarget).append("<tr><td contenteditable=true></td></tr>");
+                        }
+                        break;
+                    }
+                    default:
+                    {
+                        console.log('e.which:', e.which);
+                        counter = 0;
+                        // cell has been edited, make background red
+                        $(e.target).parent('tr').addClass('edited');
+                    }
+                }
+            },
+            keyup: function (e) {
+                if (e.metaKey != true) {
+                    $(e.currentTarget).parent('div').css({background: 'white'});
+                }
             },
             click: function(e) { e.stopPropagation(); },
             focusout: function(e) {
-                e.stopPropagation();
-                self.setMapProperty($(this).attr('id').split(' ')[0],
-                                    this.value);
+                         console.log('table.focusout');
+//                e.stopPropagation();
+//                self.setMapProperty('expr', this.value);
             },
-        }, 'textarea');
+        }, 'table');
 
         $('.topMenu').on("click", '.protocol', function(e) {
             e.stopPropagation();
@@ -123,6 +186,7 @@ class MapProperties {
         $('.signalControl').addClass('disabled');
         $('#mapPropsTitle').addClass('disabled');
         $('.expression').removeClass('waiting');
+        $('#exprTable').empty();
     }
 
     selected(map) {
@@ -164,7 +228,7 @@ class MapProperties {
                     continue;
                 let key = prop.slice(4);
                 if (vars[key] == undefined)
-                    vars[key] = map[prop];
+                      vars[key] = map[prop];
                 else
                     vars[key] = 'multiple values';
             }
@@ -174,22 +238,53 @@ class MapProperties {
             $("#proto"+proto).addClass("sel");
         }
 
-        if (expr != null) {
-            $(".expression").removeClass('waiting');
-            expr = expr.replace(/;;/, '');
-            expr = expr.replace(/;/g, ';\n');
-            $(".expression").val(expr);
-            if (expr == 'multiple expressions')
-                $(".expression").css({'font-style': 'italic'});
-            else
-                $(".expression").css({'font-style': 'normal'});
+        let exprTable = $("#exprTable");
+        exprTable.empty();
+        exprTable.append("<tr><th colspan=3>Expressions</th><th class='value'>Values</th></tr>");
+        if (expr == 'multiple expressions') {
+            exprTable.css({'font-style': 'italic'});
+            exprTable.append("<tr class='even'><td colspan=3 contenteditable=true>Multiple Expressions</td><td class='value'></td></tr>")
         }
+        else if (expr != null) {
+            console.log("setting expr to", expr);
+            console.log("vars=", vars);
+            $(".expression").removeClass('waiting');
+            exprTable.css({'font-style': 'normal'});
 
-        console.log('adding vars:', vars);
-        let literals = $("#literals");
-        literals.empty();
-        for (let key in vars) {
-            literals.append("<tr><td>"+key+": "+vars[key]+"</td></tr>");
+            function colorCode(e, v) {
+                Raphael.getColor.reset();
+                // color variable names
+                for (let key in v) {
+                    let re = new RegExp(key, 'g');
+                    e = e.replace(re, "<span style='color:"+(Raphael.getColor())+"'>"+key+"</span>");
+                }
+                return e;
+            }
+            expr = expr.split(';');
+            let rowType = 'even';
+            for (let i in expr) {
+                if (!expr[i])
+                    continue;
+                // split and color-code by assignment
+                let assignment = expr[i].indexOf('=');
+                let left = expr[i].slice(0, assignment);
+                let tdClass = vars[left] !== undefined ? 'literal' : '';
+                let value = vars[left];
+                if (value === undefined) value = 'dynamic';
+                left = colorCode(left, vars);
+                let right = expr[i].slice(assignment+1);
+                if (value != 'dynamic') {
+                    let replaceVal = Number(right);
+                    if (replaceVal == replaceVal)
+                        right = value;
+                    else
+                        right = colorCode(right, vars);
+                }
+                else
+                    right = colorCode(right, vars);
+                exprTable.append("<tr class='"+rowType+"'><td contenteditable='true'>"+left+"</td><td>=</td><td class='rhs' contenteditable='true' class='"+tdClass+"'>"+right+"</td><td style='border-left:1px solid black'>"+value+"</td></tr>");
+                rowType = rowType == 'even' ? 'odd' : 'even';
+            }
         }
     }
 
@@ -216,7 +311,7 @@ class MapProperties {
                 msg['muted'] = !map['muted'];
                 break;
             case 'expr':
-                value = value.replace(/\r?\n|\r/g, '');
+//                value = value.replace(/\r?\n|\r/g, '');
                 if (value == map.expr)
                     return;
                 msg['expr'] = value;

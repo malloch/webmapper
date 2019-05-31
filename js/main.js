@@ -271,11 +271,11 @@ function initViewCommands()
     let wheeling = false;
     let pageX, pageY, deltaX, deltaY, zooming;
     document.addEventListener('wheel', function(e) {
-        e.preventDefault();
-        if (e.pageY < 80) {
+        if (e.pageY < 140) {
             // not over container
             return;
         }
+        e.preventDefault();
         pageX = e.pageX;
         pageY = e.pageY;
         deltaX = e.deltaX;

@@ -572,9 +572,9 @@ class CanvasMapPainter extends MapPainter
             }
             else
             {
-                this.attributes[i+1].fill = this.map.selected ?
-                MapPainter.selectedColor :
-                MapPainter.defaultColor;
+                this.attributes[i+1].fill = this.map.protocol == 'UDP' ?
+                                            MapPainter.udpColor :
+                                            MapPainter.tcpColor;
                 this.attributes[i+1]['arrow-end'] = 'none'
             }
         }

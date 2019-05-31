@@ -170,7 +170,7 @@ class MapPainter {
         {
             // TODO: see if these properties can be moved to CSS
             this.attributes[i] = 
-            { 'stroke': (this.map.selected ? MapPainter.selectedColor : MapPainter.defaultColor )
+            { 'stroke': (this.map.protocol == 'UDP' ? MapPainter.udpColor : MapPainter.tcpColor )
             , 'stroke-dasharray': (this.map.muted ? MapPainter.mutedDashes : MapPainter.defaultDashes)
             , 'stroke-opacity': (this.map.status == 'staged' ? MapPainter.stagedOpacity : MapPainter.defaultOpacity)
             , 'stroke-width': (this.map.selected ? MapPainter.boldStrokeWidth : MapPainter.defaultStrokeWidth)
@@ -312,12 +312,13 @@ class MapPainter {
 
 // These static properties set the default attributes of MapPainters; edit them
 // to change the way default maps look globally
-MapPainter.selectedColor = 'red';
+MapPainter.udpColor = 'white';
+MapPainter.tcpColor = 'yellow';
 MapPainter.defaultColor = 'white';
 MapPainter.mutedDashes = '-';
 MapPainter.defaultDashes = '';
 MapPainter.stagedOpacity = 0.5;
 MapPainter.defaultOpacity = 1.0;
-MapPainter.boldStrokeWidth = 5;
+MapPainter.boldStrokeWidth = 8;
 MapPainter.defaultStrokeWidth = 4;
 MapPainter.shortenPath = 0;

@@ -185,4 +185,10 @@ class ParallelMapPainter extends ListMapPainter
         }
         return node;
     }
+
+    oneToOne(src, dst, i) {
+        if (Math.abs(src.x - dst.x) < 1)
+            this.vertical(src, dst, i);
+        else this.betweenTables(src, dst, i);
+    }
 }

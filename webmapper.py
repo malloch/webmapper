@@ -96,9 +96,9 @@ def map_props(map):
     else:
         props['process_loc'] = 'dst'
     if props['protocol'] == mpr.PROTO_UDP:
-        props['protocol'] = 'udp'
+        props['protocol'] = 'UDP'
     elif props['protocol'] == mpr.PROTO_TCP:
-        props['protocol'] = 'tcp'
+        props['protocol'] = 'TCP'
     else:
         del props['protocol']
     props['status'] = 'active'
@@ -206,6 +206,11 @@ def set_map_properties(props, map):
         elif key == 'muted':
             if val == True or val == False:
                 map[mpr.PROP_MUTED] = val
+        elif key == 'protocol':
+            if val == 'udp' or val == 'UDP':
+                map[mpr.PROP_PROTOCOL] = mpr.PROTO_UDP
+            elif val == 'tcp' or val == 'TCP':
+                map[mpr.PROP_PROTOCOL] = mpr.PROTO_TCP
         else:
             map[key] = val
     map.push()

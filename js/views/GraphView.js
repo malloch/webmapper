@@ -758,7 +758,7 @@ class GraphMapPainter extends MapPainter
         this._defaultAttributes();
         this.midPointInflation = 0;
         // constant width
-        let width = (this._highlight ? MapPainter.boldStrokeWidth : MapPainter.defaultStrokeWidth);
+        let width = (this.map.selected ? MapPainter.boldStrokeWidth : MapPainter.defaultStrokeWidth);
         this.attributes[0]['stroke-width'] = width * this.canvas.zoom;
         this.shortenPath = 12;
     }
