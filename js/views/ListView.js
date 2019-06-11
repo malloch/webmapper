@@ -137,8 +137,6 @@ class ListMapPainter extends MapPainter
 
         if (Math.abs(src.x - dst.x) < 1)
             this.vertical(src, dst, i);
-        else if (Math.abs(src.y - dst.y) < 1)
-            this.horizontal(src, dst, i);
         else this.betweenTables(src, dst, i);
     }
 
@@ -156,15 +154,6 @@ class ListMapPainter extends MapPainter
         let ctlx = src.x + offset * src.vx;
         this.pathspecs[i] = [['M', src.x, src.y], 
                             ['C', ctlx, src.y, ctlx, dst.y, dst.x, dst.y]];
-    }
-
-    horizontal(src, dst, i) 
-    {
-        // signals are inline horizontally
-        let offset = this.offset(src.x, dst.x);
-        let ctly = src.y + offset * src.vy;
-        this.pathspecs[i] = [['M', src.x, src.y],
-                            ['C', src.x, ctly, dst.x, ctly, dst.x, dst.y]];
     }
 
     offset(a, b, minoffset = 30, maxoffset = 200)

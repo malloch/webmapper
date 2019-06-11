@@ -176,6 +176,21 @@ class GridMapPainter extends ListMapPainter
         }
     }
 
+    oneToOne(src, dst, i)
+    {
+        // skip maps if src or dst y is zero, due to filtering
+        if (!src.y || !dst.y) {
+            this.pathspecs[i] = null;
+            return;
+        }
+
+        if (Math.abs(src.x - dst.x) < 1)
+            this.vertical(src, dst, i);
+        else if (Math.abs(src.y - dst.y) < 1)
+            this.horizontal(src, dst, i);
+        else this.betweenTables(src, dst, i);
+    }
+
     betweenTables(src, dst, i)
     {
         let len = this.map.srcs.length;
@@ -205,6 +220,16 @@ class GridMapPainter extends ListMapPainter
              ['L', src.left + src.width - stroke + 2, dst.top + stroke],
              ['l', 0, dst.height - stroke - 2],
              ['Z']];
+    }
+
+    horizontal(src, dst, i)
+    {
+        // signals are inline horizontally
+        let offset = this.offset(src.x, dst.x);
+        let ctly = src.y + offset * src.vy;
+        console.log('horizontal, ctly=', ctly, offset, src.vy);
+        this.pathspecs[i] = [['M', src.x, src.y],
+                             ['C', src.x, ctly, dst.x, ctly, dst.x, dst.y]];
     }
 
     // disable drawing convergent maps in grid view for now
