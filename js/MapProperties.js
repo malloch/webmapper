@@ -19,10 +19,13 @@ class MapProperties {
                 "</div>"+
             "</div>"+
             "<div id='expression' class='signalControl disabled' style='position:absolute;width:calc(100% - 200px);left:200px;top:-20px;height:100%;padding:5px;'>"+
-                "<div style='width:100%;height:100%;float:left;background:white;padding:2px;border:1px solid gray;overflow:scroll'>"+
-                    "<table id='exprTable'><tbody></tbody></table>"+
+                "<div style='width:100%;height:100%;float:left;background:black;padding:2px;border:1px solid gray;overflow:scroll'>"+
+                    "<table id='exprTable'><tbody id='exprTableBody'></tbody></table>"+
                 "</div>"+
             "</div>");
+
+        // make table sortable
+        $('#exprTableBody').sortable({cancel: ':input,button,[contenteditable]'});
 
         this._addHandlers();
     }
@@ -39,14 +42,40 @@ class MapProperties {
         $('.topMenu').on({
             keydown: function(e) {
                 e.stopPropagation();
+                let table = $(e.currentTarget);
+                let border = table.parent('div');
+                let td = $(e.target);
+                let tr = td.parent('tr');
+                let rowIndex = tr.index();
                 if (e.metaKey == true) {
-                    $(e.currentTarget).parent('div').css({background: 'red'});
+                    border.css({background: 'red'});
                 }
+                else {
+                    border.css({background: 'white'});
+                }
+                let temp, sel = window.getSelection();
                 switch (e.which) {
                     case 37:
+                        if (e.target.cellIndex == 3 && sel.anchorOffset == 0) {
+                            tr.children('td')[1].focus();
+                        }
+                        break;
                     case 38:
+                         if (rowIndex > 1)
+                            tr.prev().children('td')[e.target.cellIndex].focus();
+                         break;
                     case 39:
+                         if (e.target.cellIndex == 1 && sel.anchorOffset == td.text().length) {
+                             tr.children('td')[3].focus();
+                         }
+                         break;
                     case 40:
+                         temp = tr.next().children('td')[e.target.cellIndex];
+                         if (!temp)
+                             break;
+                         temp.focus();
+                         break;
+                    case 91:
                         break;
                     case 13: //'enter' key
                     {
@@ -55,7 +84,8 @@ class MapProperties {
                         if (e.metaKey == true) {
                             // send changes to graph
                             // first check if only literals were changed
-                            let trs = $('#exprTable tbody').children('tr').filter('.edited');
+                            let edited = $('#exprTable tbody').children('tr')
+                                                              .filter('.edited');
                             let numbers = /^[-+]?[0-9]+\.[0-9]+$/;
                             let literals_only = true;
                             function asNumberOrArray(s) {
@@ -75,8 +105,8 @@ class MapProperties {
                                     return null;
                                 }
                             }
-                            for (let i=0; i < trs.length; i++) {
-                                let rhs = $(trs[i]).children('td').eq(2).text();
+                            for (let i=0; i < edited.length; i++) {
+                                let rhs = $(edited[i]).children('td').eq(3).text();
                                 console.log('testing subexpr rhs', rhs);
                                 if (asNumberOrArray(rhs) == null) {
                                     literals_only = false
@@ -84,9 +114,9 @@ class MapProperties {
                                 }
                             }
                             if (literals_only) {
-                                for (let i=0; i < trs.length; i++) {
-                                    let key = $(trs[i]).children('td').eq(0).text();
-                                    let value = $(trs[i]).children('td').eq(2).text();
+                                for (let i=0; i < edited.length; i++) {
+                                    let key = $(edited[i]).children('td').eq(1).text();
+                                    let value = $(edited[i]).children('td').eq(3).text();
                                     value = asNumberOrArray(value);
                                     console.log('edited literal', key, value);
                                     self.setMapProperty('var@'+key, value);
@@ -94,12 +124,13 @@ class MapProperties {
                             }
                             else {
                                 // need to concatenate entire table and send
-                                trs = $('#exprTable tbody').children('tr');
+                                let all = $('#exprTable tbody').children('tr');
                                 let str = "";
-                                for (let i = 1; i < trs.length; i++) {
-                                    let key = $(trs[i]).children('td').eq(0).text();
-                                    let value = $(trs[i]).children('td').eq(2).text();
-                                    str += key+'='+value+';';
+                                for (let i = 1; i < all.length; i++) {
+                                    let key = $(all[i]).children('td').eq(1).text();
+                                    let value = $(all[i]).children('td').eq(3).text();
+                                    if (key != "" && value != "")
+                                        str += key+'='+value+';';
                                 }
                                 console.log('edited expr', str);
                                 self.setMapProperty('expr', str);
@@ -112,37 +143,48 @@ class MapProperties {
                         e.preventDefault();
                         break;
                     }
-                    case 187:
-                    {
-                        e.preventDefault();
-                        // '=' key
-                             console.log('e.target.cellIndex:', e.target.cellIndex);
-                        if (e.target.cellIndex != 0)
-                             return;
-                        $(e.target).parent('tr').append("<td>=</td><td class='rhs' contenteditable=true></td><td class='value'></td>");
-                        break;
-                    }
                     case 9:
                     {
                         // 'tab' key
-                        if (e.target.cellIndex == 2) {
-                             // add another row to table
-                             $(e.currentTarget).append("<tr><td contenteditable=true></td></tr>");
+                        e.preventDefault();
+                        if (e.target.cellIndex == 3) {
+                            // add another row to table
+                            tr.after("<tr><td class='index'>"+rowIndex+"</td><td contenteditable=true></td></tr>");
+                            // move focus to new row
+                            tr.next().children('td')[1].focus();
+                            // renumber remaining rows
+                            let trs = table.children('tbody').children('tr');
+                            for (let i = rowIndex+2; i < trs.length; i++) {
+                                $(trs[i]).children('td')[0].textContent = i-1;
+                            }
                         }
                         break;
+                    }
+                    case 187:
+                    {
+                         if (e.shiftKey == false) {
+                             // '=' key
+                             e.preventDefault();
+                             console.log('e.target.cellIndex:', e.target.cellIndex);
+                             if (e.target.cellIndex != 1)
+                                 return;
+                             tr.append("<td>=</td><td class='rhs' contenteditable=true></td><td class='value'></td>");
+                             tr.children('td')[3].focus();
+                             break;
+                         }
                     }
                     default:
                     {
                         console.log('e.which:', e.which);
                         counter = 0;
                         // cell has been edited, make background red
-                        $(e.target).parent('tr').addClass('edited');
+                        tr.addClass('edited');
                     }
                 }
             },
             keyup: function (e) {
                 if (e.metaKey != true) {
-                    $(e.currentTarget).parent('div').css({background: 'white'});
+                    $(e.currentTarget).css({background: 'black'});
                 }
             },
             click: function(e) { e.stopPropagation(); },
@@ -240,10 +282,10 @@ class MapProperties {
 
         let exprTable = $("#exprTable");
         exprTable.empty();
-        exprTable.append("<tr><th colspan=3>Expressions</th><th class='value'>Values</th></tr>");
+        exprTable.append("<tr><th class='index'></th><th colspan=3>Expressions</th><th class='value'>Values</th></tr>");
         if (expr == 'multiple expressions') {
             exprTable.css({'font-style': 'italic'});
-            exprTable.append("<tr class='even'><td colspan=3 contenteditable=true>Multiple Expressions</td><td class='value'></td></tr>")
+            exprTable.append("<tr class='even'><td class='index'></td><td colspan=3 contenteditable=true>Multiple Expressions</td><td class='value'></td></tr>")
         }
         else if (expr != null) {
             console.log("setting expr to", expr);
@@ -282,7 +324,7 @@ class MapProperties {
                 }
                 else
                     right = colorCode(right, vars);
-                exprTable.append("<tr class='"+rowType+"'><td contenteditable='true'>"+left+"</td><td>=</td><td class='rhs' contenteditable='true' class='"+tdClass+"'>"+right+"</td><td style='border-left:1px solid black'>"+value+"</td></tr>");
+                exprTable.append("<tr class='"+rowType+"'><td class='index'>"+i+"</td><td contenteditable='true'>"+left+"</td><td>=</td><td class='rhs' contenteditable='true' class='"+tdClass+"'>"+right+"</td><td class='value'>"+value+"</td></tr>");
                 rowType = rowType == 'even' ? 'odd' : 'even';
             }
         }

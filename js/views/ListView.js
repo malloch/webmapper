@@ -186,9 +186,9 @@ class ListMapPainter extends MapPainter
             }
             else
             {
-                this.attributes[i+1].fill = this.map.protocol == 'UDP' ?
-                                            MapPainter.udpColor :
-                                            MapPainter.tcpColor;
+                this.attributes[i+1].fill = this.map.protocol == 'TCP' ?
+                                            MapPainter.tcpColor :
+                                            MapPainter.udpColor;
                 this.attributes[i+1]['arrow-end'] = 'none'
             }
         }

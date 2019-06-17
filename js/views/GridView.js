@@ -252,9 +252,9 @@ class GridMapPainter extends ListMapPainter
             this.attributes[i+len]['stroke-dasharray'] = MapPainter.defaultDashes;
             this.attributes[i+len]['arrow-end'] = 'none';
             this.attributes[i+len]['stroke-linejoin'] = 'round';
-            this.attributes[i+len]['fill'] = this.map.protocol == 'UDP' ?
-                                             MapPainter.udpColor :
-                                             MapPainter.tcpColor;
+            this.attributes[i+len]['fill'] = this.map.protocol == 'TCP' ?
+                                             MapPainter.tcpColor :
+                                             MapPainter.udpColor;
 
             let src = this.map.srcs[i].position;
             let dst = this.map.dst.position;

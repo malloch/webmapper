@@ -170,7 +170,7 @@ class MapPainter {
         {
             // TODO: see if these properties can be moved to CSS
             this.attributes[i] = 
-            { 'stroke': (this.map.protocol == 'UDP' ? MapPainter.udpColor : MapPainter.tcpColor )
+            { 'stroke': (this.map.protocol == 'TCP' ? MapPainter.tcpColor : MapPainter.udpColor )
             , 'stroke-dasharray': (this.map.muted ? MapPainter.mutedDashes : MapPainter.defaultDashes)
             , 'stroke-opacity': (this.map.status == 'staged' ? MapPainter.stagedOpacity : MapPainter.defaultOpacity)
             , 'stroke-width': (this.map.selected ? MapPainter.boldStrokeWidth : MapPainter.defaultStrokeWidth)
