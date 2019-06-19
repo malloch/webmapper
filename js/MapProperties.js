@@ -55,21 +55,48 @@ class MapProperties {
                 }
                 let temp, sel = window.getSelection();
                 switch (e.which) {
-                    case 37:
+                    case 37: // left arrow
                         if (e.target.cellIndex == 3 && sel.anchorOffset == 0) {
                             tr.children('td')[1].focus();
                         }
                         break;
-                    case 38:
+                    case 38: // up arrow
                          if (rowIndex > 1)
                             tr.prev().children('td')[e.target.cellIndex].focus();
-                         break;
-                    case 39:
-                         if (e.target.cellIndex == 1 && sel.anchorOffset == td.text().length) {
-                             tr.children('td')[3].focus();
+                         // check if row is empty
+                         else {
+                            // prepend a row to table
+                            tr.before("<tr><td class='index'>"+rowIndex+"</td><td contenteditable=true></td><td>=</td><td class='rhs' contenteditable=true></td><td class='value'></td></tr>");
+                            // move focus to new row
+                            tr.prev().children('td')[1].focus();
+                            // renumber remaining rows
+                            let trs = table.children('tbody').children('tr');
+                            for (let i = rowIndex; i < trs.length; i++) {
+                                $(trs[i]).children('td')[0].textContent = i-1;
+                                if (i%2==0) {
+                                    $(trs[i]).removeClass('even');
+                                    $(trs[i]).addClass('odd');
+                                }
+                                else {
+                                    $(trs[i]).removeClass('odd');
+                                    $(trs[i]).addClass('even');
+                                }
+                            }
                          }
                          break;
-                    case 40:
+                    case 39: // right arrow
+                         if (sel.anchorOffset == td.text().length) {
+                            if (e.target.cellIndex == 1)
+                                tr.children('td')[3].focus();
+                            else if (e.target.cellIndex == 3) {
+                                temp = tr.next().children('td')[0];
+                                if (!temp)
+                                    break;
+                                temp.focus();
+                            }
+                         }
+                         break;
+                    case 40: // down arrow
                          temp = tr.next().children('td')[e.target.cellIndex];
                          if (!temp)
                              break;
@@ -149,15 +176,25 @@ class MapProperties {
                         e.preventDefault();
                         if (e.target.cellIndex == 3) {
                             // add another row to table
-                            tr.after("<tr><td class='index'>"+rowIndex+"</td><td contenteditable=true></td></tr>");
+                            tr.after("<tr><td class='index'>"+rowIndex+"</td><td contenteditable=true></td><td>=</td><td class='rhs' contenteditable=true></td><td class='value'></td></tr>");
                             // move focus to new row
                             tr.next().children('td')[1].focus();
                             // renumber remaining rows
                             let trs = table.children('tbody').children('tr');
-                            for (let i = rowIndex+2; i < trs.length; i++) {
+                            for (let i = rowIndex+1; i < trs.length; i++) {
                                 $(trs[i]).children('td')[0].textContent = i-1;
+                                if (i%2==0) {
+                                    $(trs[i]).removeClass('even');
+                                    $(trs[i]).addClass('odd');
+                                }
+                                else {
+                                    $(trs[i]).removeClass('odd');
+                                    $(trs[i]).addClass('even');
+                                }
                             }
                         }
+                        else if (e.target.cellIndex == 1)
+                            tr.children('td')[3].focus();
                         break;
                     }
                     case 187:
@@ -168,7 +205,6 @@ class MapProperties {
                              console.log('e.target.cellIndex:', e.target.cellIndex);
                              if (e.target.cellIndex != 1)
                                  return;
-                             tr.append("<td>=</td><td class='rhs' contenteditable=true></td><td class='value'></td>");
                              tr.children('td')[3].focus();
                              break;
                          }
@@ -297,8 +333,9 @@ class MapProperties {
                 Raphael.getColor.reset();
                 // color variable names
                 for (let key in v) {
-                    let re = new RegExp(key, 'g');
-                    e = e.replace(re, "<span style='color:"+(Raphael.getColor())+"'>"+key+"</span>");
+                    let re = new RegExp('(?<![#a-z0-9])'+key, 'g');
+                    let color = Raphael.getColor();
+                    e = e.replace(re, "<span style='color:"+color+"'>"+key+"</span>");
                 }
                 return e;
             }
