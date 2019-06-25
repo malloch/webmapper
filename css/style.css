@@ -228,6 +228,10 @@ path {
     top: 0px;
 }
 
+.topMenuTitle.edited {
+    background: red;
+}
+
 .topMenuContainer {
     position: relative;
     float: left;
@@ -882,6 +886,7 @@ h1, h2, h3, h4, h5, h6 {
 
 #exprTable .index {
     border-right: 1px solid white;
+    cursor: pointer;
 }
 
 #exprTable .value {
@@ -890,8 +895,23 @@ h1, h2, h3, h4, h5, h6 {
 
 #exprTable .rhs {
     width: 100%;
+    cursor: text;
+}
+
+#exprTable .lhs {
+    text-align: right;
+    cursor: text;
 }
 
 #exprTable .edited {
     color: red;
+}
+
+#exprTable .clear {
+    background: url(/images/clear.png);
+    width: 15px;
+    height: 15px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position-y: center;
 }
