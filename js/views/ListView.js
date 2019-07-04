@@ -85,7 +85,7 @@ class ListView extends View {
         }
         let updated = false;
         if (elements.indexOf('devices') >= 0 || elements.indexOf('signals') >= 0) {
-            this.updateDevices();
+            this.updateDevices(d => true);
             updated = true;
         }
         if (elements.indexOf('maps') >= 0) {

@@ -39,7 +39,12 @@ class ViewManager
     }
 
     zoom(x, y, delta) {
-        this.views[this.currentView].zoom(x, y, delta);
+        let view = this.views[this.currentView];
+        if (x === null)
+            x = view.mapPane.cx;
+        if (y === null)
+            y = view.mapPane.cy;
+        view.zoom(x, y, delta);
     }
 
     pan(x, y, delta_x, delta_y) {

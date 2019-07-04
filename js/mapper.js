@@ -26,6 +26,13 @@ class Mapper
         }
     }
 
+    set(srckeys, dstkey, props)
+    {
+        props['srcs'] = srckeys;
+        props['dst'] = dstkey;
+        command.send('set_map', props);
+    }
+
     converge(srckey, dstmap, method)
     {
         if (srckey === dstmap.dst.key || dstmap.srcs.map(s => s.key).indexOf(srckey) >= 0)

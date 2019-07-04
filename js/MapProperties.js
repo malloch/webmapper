@@ -99,7 +99,7 @@ class MapProperties {
                         function asNumberOrArray(s) {
                             if (s[0] == '[') {
                                 // treat as array
-                                s = s.slice[1,s.length-1]
+                                s = s.slice(1, s.length-1);
                                 let a = s.split(',').map(Number);
                                 if (a.some(v => v != v)) {
                                     console.log("value array", a, "contains NaN!");
@@ -357,7 +357,13 @@ class MapProperties {
                 let left = expr[i].slice(0, assignment);
                 let tdClass = vars[left] !== undefined ? 'literal' : '';
                 let value = vars[left];
-                if (value === undefined) value = 'dynamic';
+                if (value === undefined)
+                    value = 'dynamic';
+                else if (Array.isArray(value)) {
+                    value = value.map(v => v.toFixed(3));
+                }
+                else
+                    value = value.toFixed(3);
                 left = colorCode(left, vars);
                 let right = expr[i].slice(assignment+1);
                 if (value != 'dynamic') {
@@ -409,8 +415,7 @@ class MapProperties {
             }
 
             // copy src and dst names
-            msg['srcs'] = []
-            for (let s of map.srcs) msg['srcs'].push(s.key);
+            msg['srcs'] = map.srcs.map(s => s.key);
             msg['dst'] = map['dst'].key;
 
             // send the command, should receive a /mapped message after.

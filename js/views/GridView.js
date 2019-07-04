@@ -108,7 +108,7 @@ class GridView extends View {
         }
         let updated = false;
         if (elements.indexOf('devices') >= 0 || elements.indexOf('signals') >= 0) {
-            this.updateDevices();
+            this.updateDevices(d => true);
             let grow = false;
             if (this.tables.left.expandWidth != this.leftExpandWidth) {
                 this.leftExpandWidth = this.tables.left.expandWidth;

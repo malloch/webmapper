@@ -246,14 +246,12 @@ function initViewCommands()
             case 187:
                 // decrease zoom
                 e.preventDefault();
-                mp = viewManager.view.mapPane;
-                viewManager.zoom(mp.cx, mp.cy, -10);
+                viewManager.zoom(null, null, -10);
                 break;
             case 189:
                 // increase zoom
                 e.preventDefault();
-                mp = viewManager.view.mapPane;
-                viewManager.zoom(mp.cx, mp.cy, 10);
+                viewManager.zoom(null, null, 10);
                 break;
             case 70:
                 // "find": focus on signal filter

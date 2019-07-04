@@ -107,21 +107,21 @@ class ChordView extends View {
                 dev.index = onlineIndex++;
             let angleInc = offline ? self.offlineInc : self.onlineInc;
             let numDevs = offline ? self.offlineDevs : self.onlineDevs;
-            let x = cx;
             let angle = (dev.index - 0.45) * angleInc;
             let pstart = {'angle': angle,
-                          'x': x + Math.cos(angle) * r,
+                          'x': cx + Math.cos(angle) * r,
                           'y': cy + Math.sin(angle) * r};
             angle += angleInc * self.gap(numDevs);
             let pstop = {'angle': angle,
-                         'x': x + Math.cos(angle) * r,
+                         'x': cx + Math.cos(angle) * r,
                          'y': cy + Math.sin(angle) * r};
 
             if (!dev.view) {
-                let path = [['M', x, cy]];
+                let path = [['M', cx, cy]];
+                                console.log("devpath:", cx, cy);
                 dev.view = self.canvas.path().attr({'path': path,
                                                     'fill-opacity': 0,
-                                                    'stroke-opacity': 0,
+                                                    'stroke-opacity': 1,
                                                     'stroke-linecap': 'butt',
                                                     'stroke-width': 0});
                 self.setDevClick(dev);
@@ -145,12 +145,12 @@ class ChordView extends View {
                                      'font-size': 16,
                                      'fill': 'white',
                                      'text-anchor': anchor,
-                                     'x': x,
+                                     'x': cx,
                                      'y': cy});
                 dev.view.label.node.setAttribute('pointer-events', 'none');
             }
             if (!dev.view.stick) {
-                let path = [['M', x, cy]];
+                let path = [['M', cx, cy]];
                 let color = Raphael.hsl(dev.hue, dev.hidden ? 0 : 1, 0.5);
                 dev.view.stick = self.canvas.path().attr({'path': path,
                                                           'stroke': color,

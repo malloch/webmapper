@@ -319,6 +319,7 @@ class ConsoleView extends View {
                         break;
                     case 'modify':
                     case 'mod':
+                        let srcs, dst;
                         let msg = {};
                         let argidx = 0
                         if (/^\d*$/.test(command[1])) {
@@ -326,8 +327,8 @@ class ConsoleView extends View {
                             let index = 0;
                             self.graph.maps.each(function(map) {
                                 if (++index == parseInt(command[1])) {
-                                    msg['src'] = map['src'].key;
-                                    msg['dst'] = map['dst'].key;
+                                    srcs = map.srcs.map(s => s.key);
+                                    dst = map.dst.key;
                                     argidx = 2;
                                 }
                             });
@@ -339,15 +340,16 @@ class ConsoleView extends View {
                             break;
                         }
                         else {
-                            msg['src'] = command[1];
-                            msg['dst'] = command[2];
+                            srcs = [command[1]];
+                            dst = command[2];
                             argidx = 3;
                         }
                         while (argidx < command.length - 1) {
                             msg[command[argidx]] = command[argidx+1];
                             argidx++;
                         }
-                        $('#TopMenuWrapper').trigger('setMap', [msg]);
+                        console.log("MOD?", srcs, dst, msg);
+                        mapper.set(srcs, dst, msg);
                         break;
                     case 'echo':
                         this.echo(command.slice(1).join(' '));
