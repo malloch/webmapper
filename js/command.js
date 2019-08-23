@@ -12,9 +12,11 @@ var command = {
     num_ws_tries: 0,
 
     json_handler: function(text) {
+        console.log('json_handler', text)
         if (text.length == 0)
             return;
         var msg = JSON.parse(text);
+        console.log("MSG:", msg);
         if (msg && msg['id'] != null)
             command.requests.take(msg['id']);
         command.maintain_requests(false);
@@ -102,6 +104,7 @@ var command = {
     },
 
     open_websocket: function() {
+        console.log('open_websocket()');
         command.ws = null;
 
         if (command.num_ws_tries == 10) {
@@ -141,6 +144,7 @@ var command = {
             document.title = 'mapperGUI: connected to server';
         }
         command.ws.onmessage = function(e) {
+            console.log('ws.on_message()', e);
             command.json_handler(e.data);
         }
         command.ws.onerror = function(e) {

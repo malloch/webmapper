@@ -120,11 +120,11 @@ def map_props(map):
         props['dst_max'] = slotprops['max']
     if slotprops.has_key('calib'):
         props['dst_calibrating'] = slotprops['calib']
-    print(props)
     return props
 
 def on_device(type, dev, action):
     if action == mpr.OBJ_NEW or action == mpr.OBJ_MOD:
+        print('NEW DEVICE')
         server.send_command("add_devices", [dev_props(dev)])
     elif action == mpr.OBJ_REM:
         server.send_command("del_device", dev_props(dev))
@@ -184,7 +184,7 @@ def set_map_properties(props, map):
     if 'dst' in props:
         del props['dst']
     for key in props:
-        print('prop', key, props[key])
+#        print('prop', key, props[key])
         val = props[key]
         if val == 'true' or val == 'True' or val == 't' or val == 'T':
             val = True
@@ -241,10 +241,10 @@ def init_graph(arg):
     g.add_callback(on_map, mpr.MAP)
 
 server.add_command_handler("add_devices",
-                           lambda x: ("add_devices", list(map(dev_props, g.devices()))))
+                           lambda x: ("add_devices", [dev_props(d) for d in g.devices()]))
 
 def subscribe(device):
-    if device == "all_devices":
+    if device == 'all_devices':
         g.subscribe(mpr.DEV)
     else:
         # todo: only subscribe to inputs and outputs as needed
@@ -278,10 +278,10 @@ def release_map(args):
 server.add_command_handler("subscribe", lambda x: subscribe(x))
 
 server.add_command_handler("add_signals",
-                           lambda x: ("add_signals", list(map(sig_props, g.signals()))))
+                           lambda x: ("add_signals", [sig_props(s) for s in g.signals()]))
 
 server.add_command_handler("add_maps",
-                           lambda x: ("add_maps", list(map(map_props, g.maps()))))
+                           lambda x: ("add_maps", [map_props(m) for m in g.maps()]))
 
 server.add_command_handler("set_map", lambda x: set_map_properties(x, None))
 

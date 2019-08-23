@@ -16,7 +16,7 @@ from io import StringIO
 import pdb
 
 message_pipe = queue.Queue()
-tracing = True
+tracing = False
 done = False
 
 class RequestCounter(object):
@@ -64,7 +64,6 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
             raise e
 
     def do_GET(self):
-        print('DOGET')
         command = self.path
         args = []
         try:
@@ -72,64 +71,58 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
             command = parsed.path
             args = dict(urllib.parse.parse_qsl(parsed.query))
         except Exception as e:
-            print(e)
+            print('exception:', e)
 
-        contenttype = { 'html': 'Content-Type: text/html; charset=UTF-8',
-                        'js': 'Content-Type: text/javascript',
-                        'css': 'Content-Type: text/css',
-                        'json': 'Content-Type: text/javascript',
-                        'png': 'Content-Type: image/png',
-                        'dl': None}
+        contenttype = { 'html': 'text/html; charset=UTF-8',
+                        'js':   'text/javascript',
+                        'css':  'text/css',
+                        'json': 'text/javascript',
+                        'png':  'image/png',
+                        'dl':   None}
+
         def found(type=''):
             if (type=='socket'):
                 if tracing: print('websocket requested')
                 return self.do_websocket()
-            self.wfile.write(b'HTTP/1.0 200 OK')
+            self.send_response(200)
             if type=='dl': return
-            try:
-                self.wfile.write(contenttype[type].encode('utf-8'))
-            except KeyError:
-                pass
-            finally:
-                self.wfile.write(b'\r')
-#                self.wfile.flush()
+            elif type in contenttype:
+                self.send_header('Content-Type', contenttype[type])
+                self.end_headers()
 
         def notfound(type=''):
-            self.wfile.write(b'HTTP/1.0 404 Not Found')
-            try:
-                self.wfile.write(contenttype[type].encode('utf-8'))
-            finally:
-                self.wfile.write(b'\r')
-#                self.wfile.flush()
+            self.send_response(404)
+            self.send_header('Content-Type', contenttype['html'])
+            self.end_headers()
+            self.wfile.write(b'404 Not Found:'+self.path.encode('utf-8'))
 
         try:
+            print('fpp', command, args)
             found(handlers[command][1])
             if command=='/send_cmd':
                 if tracing: print('hxr_recv:', args['msg'])
             handlers[command][0](self.wfile, args)
         except KeyError:
+            print('keyerror')
             try:
-#                f = open(self.path[1:], 'rb')
-#                found(self.path.rsplit('.',1)[-1])
-#                self.copyfile(f, self.wfile)
                 type = self.path.rsplit('.',1)[-1]
                 if type in contenttype:
-#                    print('SENDING', contenttype[type], self.path[1:])
+                    print('sending response 200')
                     self.send_response(200)
+                    print('opening file')
                     f = open(self.path[1:], 'rb')
+                    print('calling found()')
                     found(type)
-#                    ftext = f.read()
-#                    self.wfile.write(contenttype[type].encode('utf-8'))
-                    self.end_headers()
-#                    self.wfile.write(ftext.encode('utf-8'))
+                    print('copying file')
                     self.copyfile(f, self.wfile)
+                    print('done')
             except IOError:
-                notfound('html')
-                self.wfile.write(b'404 Not Found:', self.path.encode('utf-8'))
+                notfound(self.path)
 
     def do_websocket(self):
         ref.inc()
         ws_version = self.websocket_handshake()
+        print('ws_version =', ws_version)
         try:
             if ws_version < 8:
                 self.do_websocket_0()
@@ -181,18 +174,21 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
 
     def do_websocket_8(self):
         def send_string(s):
-            print('send_string()')
+            print('send_string', s)
+            s = s.encode('utf-8')
             l = len(s)
             first = 1
             while l > 0:
                 temp = None
                 if l >= 32767:
+                    print(l, '>= 32767')
                     opcode = chr(0<<7|first) # !FIN + text/continuation frame
                     temp = s[32767:l]
                     s = s[0:32767]
                     L = chr(126)+chr((32767>>8)&0xFF)+chr(32767&0xFF)
                     first = 0
                 else:
+                    print(l, '< 32767')
                     opcode = chr((1<<7)|first) # FIN + text frame
                     if l<126:
                         L = chr(l)
@@ -200,7 +196,7 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
                         L = chr(126)+chr((l>>8)&0xFF)+chr(l&0xFF)
                     l = 0
                 self.wfile.write((opcode+L).encode('utf-8'))
-                self.wfile.write(s.encode('utf-8'))
+                self.wfile.write(s)
                 self.wfile.flush()
                 if temp != None:
                     s = temp
@@ -218,6 +214,7 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
                 if tracing: print('ws_send:', sendmsg)
                 s = json.dumps({"cmd": sendmsg[0],
                                 "args": sendmsg[1]})
+                print('sending message_pipe', s)
                 send_string(s)
                 n += 1
 
@@ -308,13 +305,11 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
             return int(self.headers['Sec-WebSocket-Version'])
 
 def handler_page(out, args):
-    print('handler_page')
     htmlfile = open('html/webmapper.html')
     htmltext = htmlfile.read()
     out.write(htmltext.encode('utf-8'))
 
 def handler_wait_command(out, args):
-    print('handler_wait_command')
     i=0
     ref.inc()
     while message_pipe.empty()==False:
@@ -339,7 +334,6 @@ def handler_wait_command(out, args):
                           "args": msg[1]}))
 
 def handler_send_command(out, args):
-    print('handler_send_command', args)
     try:
         msgstring = args['msg']
         vals = json.loads(msgstring)
@@ -354,22 +348,17 @@ def handler_send_command(out, args):
 
     # JSON decoding returns unicode which doesn't work well with
     # our C library, so convert any strings to str.
-#    print('vals[args] before:', vals['args'])
-#    vals['args'] = deunicode(vals['args'])
-#    print('vals[args] after:', vals['args'])
+    vals['args'] = deunicode(vals['args'])
 
     res = h(vals['args'])
-    print(res)
     if res:
         out.write(json.dumps({"cmd": res[0],
                               "args": res[1]}).encode('utf-8'))
 
 def handler_sock(out, args):
-    print('handler_sock')
     pass
 
 def handler_save(out, args):
-    print('handler_save')
     if not 'save' in cmd_handlers:
         out.write(b'\r')
         out.write(b'Error, no save handler registered.')
@@ -402,7 +391,9 @@ cmd_handlers = {}
 
 def deunicode(o):
     d = dir(o)
-    if 'items' in d:
+    if o.__class__==str:
+        p = o.encode('ascii','replace')
+    elif 'items' in d:
         p = dict([(deunicode(x),deunicode(y)) for (x,y) in list(o.items())])
     elif '__dict__' in d:
         p = o.copy()
@@ -410,13 +401,12 @@ def deunicode(o):
                            for (x,y) in list(o.__dict__.items())])
     elif '__iter__' in d:
         p = [deunicode(x) for x in o]
-    elif o.__class__==str:
-        p = o.encode('ascii','replace')
     else:
         p = o
     return p
 
 def send_command(cmd, args):
+    print('send_command', cmd, args)
     message_pipe.put((cmd, args))
 
 def add_command_handler(cmd, handler):
