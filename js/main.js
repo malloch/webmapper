@@ -132,11 +132,11 @@ function init() {
  * initialize the event listeners for events triggered by the monitor
  */
 function initMonitorCommands() {
-    command.register("available_networks", function(cmd, args) {
+    command.register("available_interfaces", function(cmd, args) {
         graph.networkInterfaces.available = args;
         netSelector.update();
     });
-    command.register("active_network", function(cmd, args) {
+    command.register("active_interface", function(cmd, args) {
         graph.networkInterfaces.selected = args
         netSelector.update();
     });

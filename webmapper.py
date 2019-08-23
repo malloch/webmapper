@@ -36,7 +36,7 @@ def open_gui(port):
                     return
             webbrowser.open(url)
         except:
-            print 'Error opening web browser, continuing anyway.'
+            print('Error opening web browser, continuing anyway.')
     launcher = threading.Thread(target=launch)
     launcher.start()
 
@@ -120,36 +120,27 @@ def map_props(map):
         props['dst_max'] = slotprops['max']
     if slotprops.has_key('calib'):
         props['dst_calibrating'] = slotprops['calib']
+    print(props)
     return props
 
 def on_device(type, dev, action):
-#    print "on_dev"
     if action == mpr.OBJ_NEW or action == mpr.OBJ_MOD:
-#        print 'ON_DEVICE (added or modified)', dev_props(dev)
         server.send_command("add_devices", [dev_props(dev)])
     elif action == mpr.OBJ_REM:
-#        print 'ON_DEVICE (removed)', dev_props(dev)
         server.send_command("del_device", dev_props(dev))
     elif action == mpr.OBJ_EXP:
-#        print 'ON_DEVICE (expired)', dev_props(dev)
         server.send_command("del_device", dev_props(dev))
 
 def on_signal(type, sig, action):
-#    print "on_sig"
     if action == mpr.OBJ_NEW or action == mpr.OBJ_MOD:
-#        print 'ON_SIGNAL (added or modified)', sig_props(sig)
         server.send_command("add_signals", [sig_props(sig)])
     elif action == mpr.OBJ_REM:
-#        print 'ON_SIGNAL (removed)', sig_props(sig)
         server.send_command("del_signal", sig_props(sig))
 
 def on_map(type, map, action):
-    print "on_map"
     if action == mpr.OBJ_NEW or action == mpr.OBJ_MOD:
-        print 'ON_MAP (added or modified)', map_props(map)
         server.send_command("add_maps", [map_props(map)])
     elif action == mpr.OBJ_REM:
-        print 'ON_MAP (removed)', map_props(map)
         server.send_command("del_map", map_props(map))
 
 def find_sig(fullname):
@@ -159,13 +150,13 @@ def find_sig(fullname):
         sig = dev.signals().filter(mpr.PROP_NAME, names[1]).next()
         return sig
     else:
-        print 'error: could not find device', names[0]
+        print('error: could not find device', names[0])
 
 def find_map(srckeys, dstkey):
     srcs = [find_sig(k) for k in srckeys]
     dst = find_sig(dstkey)
     if not (all(srcs) and dst): 
-        print srckeys, ' and ', dstkey, ' not found on network!'
+        print(srckeys, ' and ', dstkey, ' not found on network!')
         return
     intersect = dst.maps()
     for s in srcs:
@@ -184,7 +175,7 @@ def set_map_properties(props, map):
     if not map:
         map = find_map(props['srcs'], props['dst'])
         if not map:
-            print "error: couldn't retrieve map ", props['src'], " -> ", props['dst']
+            print("error: couldn't retrieve map ", props['src'], " -> ", props['dst'])
             return
     if 'src' in props:
         del props['src']
@@ -193,7 +184,7 @@ def set_map_properties(props, map):
     if 'dst' in props:
         del props['dst']
     for key in props:
-        print 'prop', key, props[key]
+        print('prop', key, props[key])
         val = props[key]
         if val == 'true' or val == 'True' or val == 't' or val == 'T':
             val = True
@@ -224,10 +215,11 @@ def on_load(arg):
     mapperstorage.deserialise(g, arg['sources'], arg['destinations'], arg['loading'])
 
 def select_interface(iface):
+    print('switching interface to', iface)
     global g
     g.set_interface(iface)
     networkInterfaces['active'] = iface
-    server.send_command('set_iface', iface)
+    server.send_command("active_interface", iface)
 
 def get_interfaces(arg):
     location = netifaces.AF_INET    # A computer specific integer for internet addresses
@@ -249,7 +241,7 @@ def init_graph(arg):
     g.add_callback(on_map, mpr.MAP)
 
 server.add_command_handler("add_devices",
-                           lambda x: ("add_devices", map(dev_props, g.devices())))
+                           lambda x: ("add_devices", list(map(dev_props, g.devices()))))
 
 def subscribe(device):
     if device == "all_devices":
@@ -265,15 +257,15 @@ def new_map(args):
     srcs = [find_sig(k) for k in srckeys]
     dst = find_sig(dstkey)
     if not (all(srcs) and dst): 
-        print srckeys, ' and ', dstkey, ' not found on network!'
+        print(srckeys, ' and ', dstkey, ' not found on network!')
         return
 
     map = mpr.map(srcs, dst)
     if not map:
-        print 'error: failed to create map', srckeys, "->", dstkey
+        print('error: failed to create map', srckeys, "->", dstkey)
         return;
     else:
-        print 'created map: ', srckeys, ' -> ', dstkey
+        print('created map: ', srckeys, ' -> ', dstkey)
     if props and type(props) is dict:
         set_map_properties(props, map)
     map.push()
@@ -286,10 +278,10 @@ def release_map(args):
 server.add_command_handler("subscribe", lambda x: subscribe(x))
 
 server.add_command_handler("add_signals",
-                           lambda x: ("add_signals", map(sig_props, g.signals())))
+                           lambda x: ("add_signals", list(map(sig_props, g.signals()))))
 
 server.add_command_handler("add_maps",
-                           lambda x: ("add_maps", map(map_props, g.maps())))
+                           lambda x: ("add_maps", list(map(map_props, g.maps()))))
 
 server.add_command_handler("set_map", lambda x: set_map_properties(x, None))
 

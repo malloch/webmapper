@@ -27,7 +27,7 @@ class NetworkSelector {
                 $(menu).removeClass('show');
                 let iface = td.currentTarget.innerHTML;
                 // send iface selection to backend
-                command.send('select_network', iface);
+                command.send('select_interface', iface);
             });
             e.stopPropagation();
         });
