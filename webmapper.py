@@ -106,19 +106,19 @@ def map_props(map):
     del props['is_local']
 
     slotprops = map.signal(mpr.LOC_SRC).properties
-    if slotprops.has_key('min'):
+    if 'min' in slotprops:
         props['src_min'] = slotprops['min']
-    if slotprops.has_key('max'):
+    if 'max' in slotprops:
         props['src_max'] = slotprops['max']
-    if slotprops.has_key('calib'):
+    if 'calib' in slotprops:
         props['src_calibrating'] = slotprops['calib']
 
     slotprops = map.signal(mpr.LOC_DST).properties
-    if slotprops.has_key('min'):
+    if 'min' in slotprops:
         props['dst_min'] = slotprops['min']
-    if slotprops.has_key('max'):
+    if 'max' in slotprops:
         props['dst_max'] = slotprops['max']
-    if slotprops.has_key('calib'):
+    if 'calib' in slotprops:
         props['dst_calibrating'] = slotprops['calib']
     return props
 

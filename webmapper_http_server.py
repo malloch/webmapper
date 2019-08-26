@@ -97,32 +97,24 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(b'404 Not Found:'+self.path.encode('utf-8'))
 
         try:
-            print('fpp', command, args)
             found(handlers[command][1])
             if command=='/send_cmd':
                 if tracing: print('hxr_recv:', args['msg'])
             handlers[command][0](self.wfile, args)
         except KeyError:
-            print('keyerror')
             try:
                 type = self.path.rsplit('.',1)[-1]
                 if type in contenttype:
-                    print('sending response 200')
                     self.send_response(200)
-                    print('opening file')
                     f = open(self.path[1:], 'rb')
-                    print('calling found()')
                     found(type)
-                    print('copying file')
                     self.copyfile(f, self.wfile)
-                    print('done')
             except IOError:
                 notfound(self.path)
 
     def do_websocket(self):
         ref.inc()
         ws_version = self.websocket_handshake()
-        print('ws_version =', ws_version)
         try:
             if ws_version < 8:
                 self.do_websocket_0()
@@ -147,21 +139,21 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
             if not message_pipe.empty():
                 sendmsg = message_pipe.get()
                 if tracing: print('ws_send:', sendmsg)
-                self.wfile.write(chr(0)+json.dumps({"cmd": sendmsg[0],
-                                                    "args": sendmsg[1]})
-                                 + chr(0xFF));
+                self.wfile.write(bytes([0])+json.dumps({"cmd": sendmsg[0],
+                                                        "args": sendmsg[1]})
+                                 + bytes([0xFF]));
                 self.wfile.flush()
 
             while len(select([self.rfile.fileno()],[],[],0)[0])>0:
                 msg += self.rfile.read(1)
                 if len(msg)==0:
                     break
-                if ord(msg[-1])==0x00:
+                if msg[-1]==0x00:
                     msg = "";
-                elif ord(msg[-1])==0xFF:
+                elif msg[-1]==0xFF:
                     break;
 
-            if len(msg)>0 and ord(msg[-1])==0xFF:
+            if len(msg)>0 and msg[-1]==0xFF:
                 out = StringIO()
                 if tracing: print('ws_recv:', msg[:-1])
                 handler_send_command(out, {'msg':msg[:-1]})
@@ -169,34 +161,30 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
                 r = out.getvalue()
                 if len(r) > 0:
                     if tracing: print('ws_send2:', r)
-                    self.wfile.write(chr(0)+r.encode('utf-8')+chr(0xFF))
+                    self.wfile.write(bytes([0])+r.encode('utf-8')+bytes([0xFF]))
                     self.wfile.flush()
 
     def do_websocket_8(self):
         def send_string(s):
-            print('send_string', s)
             s = s.encode('utf-8')
             l = len(s)
+            header = bytearray()
             first = 1
+
             while l > 0:
                 temp = None
                 if l >= 32767:
-                    print(l, '>= 32767')
-                    opcode = chr(0<<7|first) # !FIN + text/continuation frame
+                    header = bytearray([first, 126, (32767>>8)&0xFF, 32767&0xFF])
                     temp = s[32767:l]
                     s = s[0:32767]
-                    L = chr(126)+chr((32767>>8)&0xFF)+chr(32767&0xFF)
                     first = 0
                 else:
-                    print(l, '< 32767')
-                    opcode = chr((1<<7)|first) # FIN + text frame
                     if l<126:
-                        L = chr(l)
+                        header = bytearray([(1<<7)|first, l])
                     else:
-                        L = chr(126)+chr((l>>8)&0xFF)+chr(l&0xFF)
+                        header = bytearray([(1<<7)|first, 126, (l>>8)&0xFF, l&0xFF])
                     l = 0
-                self.wfile.write((opcode+L).encode('utf-8'))
-                self.wfile.write(s)
+                self.request.sendall(header+s)
                 self.wfile.flush()
                 if temp != None:
                     s = temp
@@ -214,7 +202,6 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
                 if tracing: print('ws_send:', sendmsg)
                 s = json.dumps({"cmd": sendmsg[0],
                                 "args": sendmsg[1]})
-                print('sending message_pipe', s)
                 send_string(s)
                 n += 1
 
@@ -224,7 +211,7 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
                 if len(msg)==prevlen:
                     return
                 if len(msg)==1:
-                    opcode=ord(msg[0]) # TODO check FIN
+                    opcode=msg[0] # TODO check FIN
                     # opcode&0x7F should be 1 for text, 2 for binary
                     if (opcode&0x7F) == 8:
                         # Connection close
@@ -232,40 +219,41 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
                     if (opcode&0x7F)!=1 and (opcode&0x7F)!=2:
                         print('[ws] unknown opcode %#x'%(opcode&0x7F))
                 if len(msg)==2:
-                    mask = ord(msg[1]) & 0x80
-                    length = ord(msg[1]) & 0x7F
+                    mask = msg[1] & 0x80
+                    length = msg[1] & 0x7F
                     offset = 2 + 4*(mask!=0)
                 if len(msg)==4:
                     if length == 126:
-                        length = (ord(msg[2])<<8) | ord(msg[3])
+                        length = (msg[2]<<8) | msg[3]
                         offset = 4 + 4*(mask!=0)
                     elif length == 127:
                         print('TODO extended message length')
                 if len(msg)==6 and length<126:
-                    key = list(map(ord,msg[2:6]))
+                    key = msg[2:6]
                 elif len(msg)==8 and mask!=0 and length >= 126:
-                    key = list(map(ord,msg[4:8]))
+                    key = msg[4:8]
                 if len(msg)==length+offset:
                     break
                 to_read = len(select([self.rfile.fileno()],[],[],0)[0]) > 0
 
             if len(msg)==length+offset:
-                m = ''.join([chr(ord(c)^key[n%4])
-                             for n,c in enumerate(msg[offset:])])
+                encrypted = msg[offset:]
+                m = bytearray([encrypted[i] ^ key[i%4] for i in range(len(encrypted))])
                 out = StringIO()
                 if tracing: print('ws_recv:', m)
                 handler_send_command(out, {'msg':m})
-                msg = ""
+                msg = b""
                 length = offset = -1
                 r = out.getvalue()
                 if len(r) > 0:
                     if tracing: print('ws_send:', r)
-                    send_string(r.encode('utf-8'))
+                    send_string(r)
 
     def websocket_handshake(self):
-        self.wfile.write(b'HTTP/1.1 101 Web Socket Protocol Handshake\r')
-        self.wfile.write(('Upgrade: %s\r'%self.headers['Upgrade']).encode('utf-8'))
-        self.wfile.write(('Connection: %s\r'%self.headers['Connection']).encode('utf-8'))
+        self.send_response(101, 'Web Socket Protocol Handshake')
+        self.send_header('Upgrade', 'websocket')
+        self.send_header('Connection', 'Upgrade')
+
         import hashlib
 
         if ('Sec-WebSocket-Version' not in self.headers
@@ -289,14 +277,16 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
 
         elif int(self.headers['Sec-WebSocket-Version'])>=8:
             key = self.headers['Sec-WebSocket-Key']
+            key = key.encode('utf-8')
             magic_guid = b'258EAFA5-E914-47DA-95CA-C5AB0DC85B11'
             import base64
-            sha1 = hashlib.sha1(key.encode('utf-8')+magic_guid)
-            result = base64.b64encode(sha1.digest())
-            self.wfile.write(('Sec-WebSocket-Accept: %s\r'%result).encode('utf-8'))
+            sha1 = hashlib.sha1(key+magic_guid)
+            digest = sha1.digest()
+            result = base64.b64encode(digest)
+            self.send_header('Sec-WebSocket-Accept', result.decode())
             if 'Sec-WebSocket-Protocol' in self.headers:
                 self.wfile.write(b'Sec-WebSocket-Protocol: webmapper\r')
-            self.wfile.write(b'\r')
+            self.end_headers()
         self.wfile.flush()
 
         if 'Sec-WebSocket-Version' not in self.headers:
@@ -384,7 +374,7 @@ def handler_save(out, args):
 handlers = {'/': [handler_page, 'html'],
             '/wait_cmd': [handler_wait_command, 'json'],
             '/send_cmd': [handler_send_command, 'json'],
-            '/sock': [handler_sock, 'socket'],
+            '/chat': [handler_sock, 'socket'],
             '/save': [handler_save, 'dl']}
 
 cmd_handlers = {}
@@ -406,7 +396,6 @@ def deunicode(o):
     return p
 
 def send_command(cmd, args):
-    print('send_command', cmd, args)
     message_pipe.put((cmd, args))
 
 def add_command_handler(cmd, handler):
