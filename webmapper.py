@@ -133,21 +133,25 @@ def on_device(type, dev, action):
 
 def on_signal(type, sig, action):
     if action == mpr.OBJ_NEW or action == mpr.OBJ_MOD:
+        print('NEW SIGNAL')
         server.send_command("add_signals", [sig_props(sig)])
     elif action == mpr.OBJ_REM:
         server.send_command("del_signal", sig_props(sig))
 
 def on_map(type, map, action):
     if action == mpr.OBJ_NEW or action == mpr.OBJ_MOD:
+        print('NEW MAP')
         server.send_command("add_maps", [map_props(map)])
     elif action == mpr.OBJ_REM:
         server.send_command("del_map", map_props(map))
 
 def find_sig(fullname):
-    names = fullname.split('/', 1)
+    print('trying to split', fullname)
+    names = fullname.decode().split('/', 1)
     dev = g.devices().filter(mpr.PROP_NAME, names[0]).next()
     if dev:
         sig = dev.signals().filter(mpr.PROP_NAME, names[1]).next()
+        print('found sig', sig, 'at', names);
         return sig
     else:
         print('error: could not find device', names[0])
@@ -234,8 +238,16 @@ def get_interfaces(arg):
     server.send_command("active_interface", networkInterfaces['active'])
 
 def init_graph(arg):
+    print('REFRESH!')
     global g
     g.subscribe(mpr.DEV, -1)
+
+    # remove old callbacks (if they are registered)
+    g.remove_callback(on_device)
+    g.remove_callback(on_signal)
+    g.remove_callback(on_map)
+
+    # register callbacks
     g.add_callback(on_device, mpr.DEV)
     g.add_callback(on_signal, mpr.SIG)
     g.add_callback(on_map, mpr.MAP)

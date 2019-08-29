@@ -12,7 +12,7 @@ from select import select
 import sys
 import struct
 import hashlib
-from io import StringIO
+from io import BytesIO
 import pdb
 
 message_pipe = queue.Queue()
@@ -138,13 +138,13 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
 
             if not message_pipe.empty():
                 sendmsg = message_pipe.get()
-                if tracing: print('ws_send:', sendmsg)
+                if tracing: print('ws0_send:', sendmsg)
                 self.wfile.write(bytes([0])+json.dumps({"cmd": sendmsg[0],
                                                         "args": sendmsg[1]})
                                  + bytes([0xFF]));
                 self.wfile.flush()
 
-            while len(select([self.rfile.fileno()],[],[],0)[0])>0:
+            while len(select([self.rfile],[],[],0)[0])>0:
                 msg += self.rfile.read(1)
                 if len(msg)==0:
                     break
@@ -154,19 +154,20 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
                     break;
 
             if len(msg)>0 and msg[-1]==0xFF:
-                out = StringIO()
-                if tracing: print('ws_recv:', msg[:-1])
+                out = BytesIO()
+                if tracing: print('ws0_recv:', msg[:-1])
                 handler_send_command(out, {'msg':msg[:-1]})
                 msg = ""
                 r = out.getvalue()
                 if len(r) > 0:
-                    if tracing: print('ws_send2:', r)
+                    if tracing: print('ws0_send2:', r)
                     self.wfile.write(bytes([0])+r.encode('utf-8')+bytes([0xFF]))
                     self.wfile.flush()
 
     def do_websocket_8(self):
         def send_string(s):
-            s = s.encode('utf-8')
+            if isinstance(s, str):
+                s = s.encode('utf-8')
             l = len(s)
             header = bytearray()
             first = 1
@@ -190,64 +191,74 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
                     s = temp
                     l = len(s)
 
-        msg = b""
-        length = -1
-        offset = -1
-        while not done:
-            to_read = len(select([self.rfile.fileno()],[],[],0.1)[0]) > 0
+        def decrypt_and_forward(buffer, key, length):
+            m = bytearray([buffer[i] ^ key[i%4] for i in range(length)])
+            out = BytesIO()
+            if tracing: print('ws8_recv:', m)
+            handler_send_command(out, {'msg':m})
+            length = offset = -1
+            r = out.getvalue()
+            if len(r) > 0:
+                if tracing: print('ws8_send2:', r)
+                send_string(r)
 
+        def check_backend():
             n = 0
             while not message_pipe.empty() and n < 30:
                 sendmsg = message_pipe.get()
-                if tracing: print('ws_send:', sendmsg)
+                if tracing: print('ws8_send:', sendmsg)
                 s = json.dumps({"cmd": sendmsg[0],
                                 "args": sendmsg[1]})
                 send_string(s)
                 n += 1
 
-            while to_read:
-                prevlen = len(msg)
-                msg += self.rfile.read(1)
-                if len(msg)==prevlen:
+        msg = b""
+        length = -1
+        offset = -1
+        while not done:
+            to_read = len(select([self.rfile],[],[],0.1)[0]) > 0
+
+            check_backend()
+
+            while True:
+                if to_read:
+                    msg += self.rfile.read1()
+                if len(msg) < 8:
+                    break
+
+                opcode=msg[0] # TODO check FIN
+                # opcode&0x7F should be 1 for text, 2 for binary
+                if (opcode&0x7F) == 8:
+                    # Connection close
+                    print('[ws] connection close!')
                     return
-                if len(msg)==1:
-                    opcode=msg[0] # TODO check FIN
-                    # opcode&0x7F should be 1 for text, 2 for binary
-                    if (opcode&0x7F) == 8:
-                        # Connection close
-                        return
-                    if (opcode&0x7F)!=1 and (opcode&0x7F)!=2:
-                        print('[ws] unknown opcode %#x'%(opcode&0x7F))
-                if len(msg)==2:
+                if (opcode&0x7F)!=1 and (opcode&0x7F)!=2:
+                    print('[ws] unknown opcode %#x'%(opcode&0x7F))
+
+                if length == -1:
                     mask = msg[1] & 0x80
                     length = msg[1] & 0x7F
                     offset = 2 + 4*(mask!=0)
-                if len(msg)==4:
+
                     if length == 126:
                         length = (msg[2]<<8) | msg[3]
                         offset = 4 + 4*(mask!=0)
                     elif length == 127:
                         print('TODO extended message length')
-                if len(msg)==6 and length<126:
-                    key = msg[2:6]
-                elif len(msg)==8 and mask!=0 and length >= 126:
-                    key = msg[4:8]
-                if len(msg)==length+offset:
-                    break
-                to_read = len(select([self.rfile.fileno()],[],[],0)[0]) > 0
 
-            if len(msg)==length+offset:
-                encrypted = msg[offset:]
-                m = bytearray([encrypted[i] ^ key[i%4] for i in range(len(encrypted))])
-                out = StringIO()
-                if tracing: print('ws_recv:', m)
-                handler_send_command(out, {'msg':m})
-                msg = b""
-                length = offset = -1
-                r = out.getvalue()
-                if len(r) > 0:
-                    if tracing: print('ws_send:', r)
-                    send_string(r)
+                    if length<126:
+                        key = msg[2:6]
+                    elif mask!=0:
+                        key = msg[4:8]
+                    else:
+                        print('error: unknown key')
+
+                if len(msg) >= length+offset:
+                    decrypt_and_forward(msg[offset:offset+length], key, length)
+                    msg = msg[offset+length:]
+                    length = offset = -1
+
+                to_read = len(select([self.rfile],[],[],0)[0]) > 0
 
     def websocket_handshake(self):
         self.send_response(101, 'Web Socket Protocol Handshake')
@@ -258,10 +269,9 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
 
         if ('Sec-WebSocket-Version' not in self.headers
             or int(self.headers['Sec-WebSocket-Version'])<8):
-            self.wfile.write(('Sec-WebSocket-Origin: %s\r'
-                              %self.headers['Origin']).encode('utf-8'))
-            self.wfile.write(('Sec-WebSocket-Location: ws://%s%s\r'
-                              %(self.headers['Host'], self.path)).encode('utf-8'))
+            self.send_header('Sec-WebSocket-Origin', self.headers['Origin'])
+            self.send_header('Sec-WebSocket-Location',
+                             'ws://%s%s'%(self.headers['Host'], self.path))
 
             key1 = self.headers['Sec-WebSocket-Key1']
             key2 = self.headers['Sec-WebSocket-Key2']
@@ -272,7 +282,7 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
                 i2=int([x for x in key2 if x.isdigit()])/key2.count(' ')
                 return hashlib.md5(struct.pack('!II',i1,i2)+code).digest()
 
-            self.wfile.write(b'\r')
+            self.end_headers()
             self.wfile.write(websocket_key_calc(key1,key2,code))
 
         elif int(self.headers['Sec-WebSocket-Version'])>=8:
@@ -285,7 +295,7 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
             result = base64.b64encode(digest)
             self.send_header('Sec-WebSocket-Accept', result.decode())
             if 'Sec-WebSocket-Protocol' in self.headers:
-                self.wfile.write(b'Sec-WebSocket-Protocol: webmapper\r')
+                self.send_header('Sec-WebSocket-Protocol', 'webmapper')
             self.end_headers()
         self.wfile.flush()
 
@@ -306,14 +316,14 @@ def handler_wait_command(out, args):
         time.sleep(0.1)
         i = i + 1
         if (i>50):
-            r, w, e=select([out.fileno()],[],[out.fileno()], 0)
+            r, w, e=select([out],[],[out], 0)
             ref.dec()
             if len(r)>0 or len(e)>0:
                 return
             out.write(json.dumps({"id": int(args['id'])}));
             return
     ref.dec()
-    r, w, e=select([out.fileno()],[],[out.fileno()], 0)
+    r, w, e=select([out],[],[out], 0)
     if len(r)>0 or len(e)>0:
         return
     # Receive command from back-end

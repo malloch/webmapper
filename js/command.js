@@ -144,7 +144,6 @@ var command = {
             document.title = 'mapperGUI: connected to server';
         }
         command.ws.onmessage = function(e) {
-            console.log('ws.on_message()', e);
             command.json_handler(e.data);
         }
         command.ws.onerror = function(e) {
