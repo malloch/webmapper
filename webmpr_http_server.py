@@ -2,8 +2,9 @@
 import socketserver
 import http.server
 import socket, errno
-import urllib.request, urllib.parse, urllib.error
-import urllib.parse
+import urllib
+#import urllib.request, urllib.parse, urllib.error
+#import urllib.parse
 import cgi
 import threading, queue
 import time
@@ -39,7 +40,7 @@ ref = RequestCounter()
 class ReuseTCPServer(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
 
-class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
+class MprHTTPServer(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         ctype, pdict = cgi.parse_header(self.headers.getheader('content-type'))
         if ctype == 'multipart/form-data':
@@ -295,7 +296,7 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
             result = base64.b64encode(digest)
             self.send_header('Sec-WebSocket-Accept', result.decode())
             if 'Sec-WebSocket-Protocol' in self.headers:
-                self.send_header('Sec-WebSocket-Protocol', 'webmapper')
+                self.send_header('Sec-WebSocket-Protocol', 'webmpr')
             self.end_headers()
         self.wfile.flush()
 
@@ -305,7 +306,7 @@ class MapperHTTPServer(http.server.SimpleHTTPRequestHandler):
             return int(self.headers['Sec-WebSocket-Version'])
 
 def handler_page(out, args):
-    htmlfile = open('html/webmapper.html')
+    htmlfile = open('html/webmpr.html')
     htmltext = htmlfile.read()
     out.write(htmltext.encode('utf-8'))
 
@@ -413,7 +414,7 @@ def add_command_handler(cmd, handler):
 
 def serve(port=8000, poll=lambda: time.sleep(10), on_open=lambda: (),
           quit_on_disconnect=True):
-    httpd = ReuseTCPServer(('', port), MapperHTTPServer)
+    httpd = ReuseTCPServer(('', port), MprHTTPServer)
     on_open()
 
     http_thread = threading.Thread(target=httpd.serve_forever)

@@ -206,7 +206,7 @@ class File {
             }
             src = src.join('/');
             dst = dst.join('/');
-            mapper.map(src, dst, map);
+            mpr.map(src, dst, map);
         }
     }
 }

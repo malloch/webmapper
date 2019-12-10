@@ -12,16 +12,16 @@ data_files = [('',['js']),
               ('',['html'])
               ]
 
-options = {'argv_emulation': True, 'iconfile': 'images/libmapper.icns'}
+options = {'argv_emulation': True, 'iconfile': 'images/libmpr.icns'}
 
-setup(name='WebMapper',
+setup(name='WebMpr',
       version='0.2',
-      description='GUI for libmapper OSC network',
+      description='GUI for libmpr OSC network',
       author='Stephen Sinclair, Aaron Krajeski & Jonathan Wilansky',
       author_email='aaron.krajeski@music.mcgill.ca',
       url='http://libmapper.org',
       data_files = data_files,
       options={'py2app': options},
-      windows=['webmapper.py'],
-      app=['webmapper.py'],
+      windows=['webmpr.py'],
+      app=['webmpr.py'],
      )

@@ -1,7 +1,8 @@
 .DS_Store
 *.swp
 *.pyc
-mapper.py
-_mapper.so
+mpr.py
+_mpr.so
 build
 dist
+_mpr.cpython-37m-darwin.so

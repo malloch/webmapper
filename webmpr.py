@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-import webmapper_http_server as server
+import webmpr_http_server as server
 import mpr
-import mapperstorage
+import mprstorage
 import netifaces # a library to find available network interfaces
 import sys, os, os.path, threading, json, re, pdb
 from random import randint
@@ -213,10 +213,10 @@ def set_map_properties(props, map):
 def on_save(arg):
     d = g.devices().filter(mpr.PROP_NAME, arg['dev']).next()
     fn = d.name+'.json'
-    return fn, mapperstorage.serialise(g, arg['dev'])
+    return fn, mprstorage.serialise(g, arg['dev'])
 
 def on_load(arg):
-    mapperstorage.deserialise(g, arg['sources'], arg['destinations'], arg['loading'])
+    mprstorage.deserialise(g, arg['sources'], arg['destinations'], arg['loading'])
 
 def select_interface(iface):
     print('switching interface to', iface)

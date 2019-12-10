@@ -108,9 +108,9 @@ var command = {
         command.ws = null;
 
         if (command.num_ws_tries == 10) {
-            document.title = 'mapperGUI: error connecting to server after 10 tries';
+            document.title = 'mprGUI: error connecting to server after 10 tries';
 //            setTimeout(function(){
-////                    document.title = 'mapperGUI (connecting...)';
+////                    document.title = 'mprGUI (connecting...)';
 //                }, 10000);
             command.num_ws_tries ++;
             return;
@@ -132,7 +132,7 @@ var command = {
         if (!command.ws) {
             if (console)
                 console.log("Couldn't create web socket.");
-            document.title = 'mapperGUI: connection to server unavailable';
+            document.title = 'mprGUI: connection to server unavailable';
             return;
         }
         command.ws.is_closed = false;
@@ -141,7 +141,7 @@ var command = {
             if (console)
                 console.log("websocket opened");
             command.ws.is_opened = true;
-            document.title = 'mapperGUI: connected to server';
+            document.title = 'mprGUI: connected to server';
         }
         command.ws.onmessage = function(e) {
             command.json_handler(e.data);
@@ -149,14 +149,14 @@ var command = {
         command.ws.onerror = function(e) {
             if (console)
                 console.log('websocket error: ' + e.data);
-            document.title = 'mapperGUI: error connecting to server' + e.data;
+            document.title = 'mprGUI: error connecting to server' + e.data;
         }
         command.ws.onclose = function(e) {
             if (console)
                 console.log("websocket closed");
             command.ws.is_closed = true;
             command.ws.is_opened = false;
-            document.title = 'mapperGUI: connection to server closed';
+            document.title = 'mprGUI: connection to server closed';
         }
     }
 };

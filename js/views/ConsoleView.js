@@ -261,9 +261,9 @@ class ConsoleView extends View {
                         break;
                     case 'map':
                         if (command.length == 3)
-                            mapper.map(command[1], command[2]);
+                            mpr.map(command[1], command[2]);
                         else if (command.length == 4 && command[2] == '->')
-                            mapper.map(command[1], command[3]);
+                            mpr.map(command[1], command[3]);
                         else
                             this.echo('map: wrong number of arguments');
                         break;
@@ -273,13 +273,13 @@ class ConsoleView extends View {
                             let index = 0;
                             self.graph.maps.each(function(map) {
                                 if (++index == command[1]) {
-                                    mapper.unmap(map.srcs.map(s => s.key),
-                                                 map.dst.key);
+                                    mpr.unmap(map.srcs.map(s => s.key),
+                                              map.dst.key);
                                 }
                             });
                         }
                         else if (command.length == 3)
-                            mapper.unmap([command[1]], command[2]);
+                            mpr.unmap([command[1]], command[2]);
                         else
                             this.echo('unmap: wrong number of arguments');
                         break;
@@ -349,7 +349,7 @@ class ConsoleView extends View {
                             argidx++;
                         }
                         console.log("MOD?", srcs, dst, msg);
-                        mapper.set(srcs, dst, msg);
+                        mpr.set(srcs, dst, msg);
                         break;
                     case 'echo':
                         this.echo(command.slice(1).join(' '));

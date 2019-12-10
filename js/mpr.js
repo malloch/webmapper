@@ -1,17 +1,17 @@
 //++++++++++++++++++++++++++++++++++++++//
-//            Mapper Class              //
+//               Mpr Class              //
 //++++++++++++++++++++++++++++++++++++++//
 
 // This class provides the functionality for creating and removing maps
 // A global instance of it is instantiated at the bottom of this file, and that ought to
 // be the only instance anyone should need.
 
-class Mapper
+class Mpr
 {
     constructor() 
     {
-        this.convergent = new ConvergentMapper();
-        this.convergent.mapper = this;
+        this.convergent = new ConvergentMpr();
+        this.convergent.mpr = this;
     }
 
     // make a one to one map
@@ -95,14 +95,14 @@ class Mapper
 // This helper class handles the complexities of preparing the arguments for making a
 // convergent map, as well as defining the supported methods of convergent mapping
 
-// The global Mapper instance owns an instance of ConvergentMapper
+// The global Mpr instance owns an instance of ConvergentMpr
 
-class ConvergentMapper
+class ConvergentMpr
 {
     constructor()
     {
-        // note: the global instance also gives ConvergentMapper a reference to itself
-        // i.e. this.mapper in ConvergentMapper's methods refers to the global Mapper
+        // note: the global instance also gives ConvergentMpr a reference to itself
+        // i.e. this.mpr in ConvergentMpr's methods refers to the global Mpr
 
         // define the supported methods of convergent mapping here
         this.method = {sum: 'sum', 
@@ -131,7 +131,7 @@ class ConvergentMapper
         }
         else if (srckeys.length == 1)
         {
-            this.mapper.map(srckeys[0], dstkey, props);
+            this.mpr.map(srckeys[0], dstkey, props);
             return;
         }
         else if (srckeys.length == 0)
@@ -140,12 +140,12 @@ class ConvergentMapper
             return;
         }
 
-        if (graph.maps.find(this.mapper.mapKey(srckeys, dstkey))) return; // map exists
+        if (graph.maps.find(this.mpr.mapKey(srckeys, dstkey))) return; // map exists
         let overlap = this._overlapWithExistingMaps(srckeys, dstkey, props);
         if (overlap !== null)
         {
             // unmap the existing convergent map to make way for the new one
-            this.mapper.unmap(overlap.srcs, overlap.dst);
+            this.mpr.unmap(overlap.srcs, overlap.dst);
         }
     }
 
@@ -207,7 +207,7 @@ class ConvergentMapper
         let [src, dst, expr] = this._prep(srckey, dstmap);
         let srcs = dstmap.srcs.concat([src]).sort();
 
-        // at time of writing, the default expression assigned by libmapper is a simple
+        // at time of writing, the default expression assigned by libmpr is a simple
         // average of the src signals not taking their bounds into account. If any of
         // the signals in the map are missing min and max properties, default to that
         if (!this._signals_have_bounds(srcs.concat([dst]))) return null; 
@@ -231,16 +231,16 @@ class ConvergentMapper
     _converge(srckey, dstmap, props)
     {
         let srckeys = dstmap.srcs.map(src => src.key);
-        this.mapper.unmap(srckeys, dstmap.dst.key);
+        this.mpr.unmap(srckeys, dstmap.dst.key);
         srckeys.push(srckey);
-        this.mapper._stage(srckeys, dstmap.dst.key);
+        this.mpr._stage(srckeys, dstmap.dst.key);
 
         // at the time of writing, the python server will not successfully create the
         // following map unless there is a time delay to give the network time to unmap
         // the existing one
 
         setTimeout(function() {
-            this.mapper._map(srckeys, dstmap.dst.key, props);
+            this.mpr._map(srckeys, dstmap.dst.key, props);
         }, 750);
     }
 
@@ -373,4 +373,4 @@ class ConvExpr
 
 }
 
-var mapper = new Mapper(); // make global instance
+var mpr = new Mpr(); // make global instance

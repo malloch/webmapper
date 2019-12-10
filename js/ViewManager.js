@@ -320,7 +320,7 @@ class ViewManager
                         if (map.selected)
                         {
                             let srcs = map.srcs.map(s => s.key);
-                            mapper.unmap(srcs, map.dst.key);
+                            mpr.unmap(srcs, map.dst.key);
                             self.tooltip.hide();
                         }
                     });

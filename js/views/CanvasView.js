@@ -122,7 +122,7 @@ class CanvasView extends View {
                 self.draggingFrom = self.snappingTo = null;
             }
             else if (self.draggingFrom && self.snappingTo) {
-                mapper.map(self.draggingFrom.key, self.snappingTo.key);
+                mpr.map(self.draggingFrom.key, self.snappingTo.key);
                 if (self.newMap) {
                     self.newMap.view.remove();
                     self.newMap = null;

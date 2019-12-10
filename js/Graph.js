@@ -791,7 +791,7 @@ function Graph() {
                     if (!dstsig)
                         return;
                     console.log('  Creating map:', srcsig.key, '->', dstsig.key);
-                    mapper._map(srcsigs.map(s => s.key), dstsig.key, map);
+                    mpr._map(srcsigs.map(s => s.key), dstsig.key, map);
                 });
             });
         }

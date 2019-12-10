@@ -1,23 +1,23 @@
-# <img style="padding:10px;float:left" src="./images/libmapper_logo_black_512px.png" width="75px"> Webmapper: a browser-based interface for administration of control-mapping networks
+# <img style="padding:10px;float:left" src="./images/libmpr_logo_black_512px.png" width="75px"> mprGUI: a browser-based interface for administration of control-mapping networks
 
 <br/>
 
 - Contributors: Stephen Sinclair, Joseph Malloch, Vijay Rudraraju, Aaron Krajeski, Jon Wilansky, Johnty Wang, Travis West
-- Resources: [Discussion list][group], [libmapper documentation][libmapper]
+- Resources: [Discussion list][group], [libmpr documentation][libmpr]
 
 During a number of projects we have found that the "mapping" task – in which correspondences are designed between sensor/gesture signals and the control parameters of media synthesizers – is by far the most challenging aspect of designing digital musical instrument or other interactive systems. This problem becomes even worse when attempted in collaborative settings, since collaborators often have different perspectives, vocabularies and tools.
 
-We have developed tools for supporting this task, including the [Digital Orchestra Toolbox][DOT] for MaxMSP and the software library [libmapper][libmapper]. The latter project enables the creation of a network of distributed "devices" which may be sources of real-time control data (instruments) and/or destinations for control data (e.g. sound synthesizers). The software library handles device discovery, stream translation (e.g. type coercion, vector padding) and network transportation, but does not attempt to create mappings automatically. Instead, the mapping designer(s) use the library to create maps between distributed signals, usually using a graphical user interface to interact with the mapping network. To date, GUIs for libmapper have been implemented in MaxMSP, Javascript/HTML5, C++/Qt, and Python/wxWidgets. **Webmapper** is one of these interfaces, implemented as a Python back-end using libmapper's Python bindings to interact with the libmapper network, and a front-end running in a web browser as HTML and Javascript.
+We have developed tools for supporting this task, including the [Digital Orchestra Toolbox][DOT] for MaxMSP and the software library [libmpr][libmpr]. The latter project enables the creation of a network of distributed "devices" which may be sources of real-time control data (instruments) and/or destinations for control data (e.g. sound synthesizers). The software library handles device discovery, stream translation (e.g. type coercion, vector padding) and network transportation, but does not attempt to create mappings automatically. Instead, the mapping designer(s) use the library to create maps between distributed signals, usually using a graphical user interface to interact with the mapping network. To date, GUIs for libmpr have been implemented in MaxMSP, Javascript/HTML5, C++/Qt, and Python/wxWidgets. **Webmpr** is one of these interfaces, implemented as a Python back-end using libmpr's Python bindings to interact with the libmpr network, and a front-end running in a web browser as HTML and Javascript.
 
 ### Functionality
 
-Webmapper aims to support the mapping task in three ways:
+Webmpr aims to support the mapping task in three ways:
 
 1. Aiding discovery and exploration of active devices and their signals. Currently 8 different "views" of the mapping network are available, each using a different visualization approach.
 2. Providing an interactive graphical interface for creating, editing, and destroying data-streaming connections ("maps") between signals. 
 3. Supporting saving and loading of mapping sets, including support for mapping transportability (cf. the [GDIF project][GDIF])
 
-All libmapper GUIs function as “dumb terminals” — no handling of mapping commands takes place in the GUI, but rather they are only responsible for representing the current state of the network, and issuing commands on behalf of the user. This means that an arbitrary number of GUIs can be open simultaneously supporting both remote network management and collaborative creation and editing during the mapping task.
+All libmpr GUIs function as “dumb terminals” — no handling of mapping commands takes place in the GUI, but rather they are only responsible for representing the current state of the network, and issuing commands on behalf of the user. This means that an arbitrary number of GUIs can be open simultaneously supporting both remote network management and collaborative creation and editing during the mapping task.
 
 ### Currently missing:
 
@@ -25,9 +25,9 @@ All libmapper GUIs function as “dumb terminals” — no handling of mapping c
 
 ### To run:
 
-1. Build and install [libmapper][libmapper]
-2. Copy `_mapper.so` and `mapper.py` from the directory /libmapper/swig into /webmapper directory.
-3. Run webmapper.py from terminal
+1. Build and install [libmpr][libmpr]
+2. Copy `_mpr.so` and `mpr.py` from the directory /libmpr/swig into /webmpr directory.
+3. Run webmpr.py from terminal
 4. Terminal will display "serving at port #####"
 5. A browser window should be opened automatically and directed to the correct port.
 
@@ -41,7 +41,7 @@ If the browser doesn't open, open it manually and type "localhost:#####" into th
 
 <img height="60px" style="padding:0px;vertical-align:middle" src="./doc/screenshots/file_io.png">
 
-Released versions of Webmapper use "naïve" file loading, in which maps specifications loaded from file are matched against all of the devices currently active on the network. This is intended to support *transportability* of mapping specifications between similar devices if their parameter spaces are structured similarly (cf. the [GDIF project][GDIF]). It also ensures that files will still load if a device receives a different ordinal id than the one used when the file was saved. Unfortunately, this naïve approach may also cause unintended consequences if a file is loaded when multiple instances of an involved device are present – to avoid these problems, see [hiding devices](#hiding_devices) in the description of the Chord View below.
+Released versions of Webmpr use "naïve" file loading, in which maps specifications loaded from file are matched against all of the devices currently active on the network. This is intended to support *transportability* of mapping specifications between similar devices if their parameter spaces are structured similarly (cf. the [GDIF project][GDIF]). It also ensures that files will still load if a device receives a different ordinal id than the one used when the file was saved. Unfortunately, this naïve approach may also cause unintended consequences if a file is loaded when multiple instances of an involved device are present – to avoid these problems, see [hiding devices](#hiding_devices) in the description of the Chord View below.
 
 #### In development: map staging
 
@@ -57,12 +57,12 @@ Text boxes are provided for filtering source and destination signals by name.
 
 Lines representing inter-signal **maps** may be drawn between signals using drag-and-drop or by clicking on the source signal and then the destination signal.
 
-Webmapper now also supports the creation and representation of *convergent* maps. If you click and drag a signal as you would usually do when making a mapping you should notice that the map you are creating will snap to existing map edges as you drag the mouse over them. If you release the mouse while snapping to an existing map, a radial menu will appear offering several preset convergent mapping methods:
+Webmpr now also supports the creation and representation of *convergent* maps. If you click and drag a signal as you would usually do when making a mapping you should notice that the map you are creating will snap to existing map edges as you drag the mouse over them. If you release the mouse while snapping to an existing map, a radial menu will appear offering several preset convergent mapping methods:
 
 1. add the new signal to the existing expression
 2. multiply the existing expression by the new signal
 3. take the average of all the sources of the convergent map
-4. use the libmapper defined default expression
+4. use the libmpr defined default expression
 
 ### Selecting maps
 
@@ -116,7 +116,7 @@ Color is used throughout the UI for differentiating devices and their signals. T
 
 We have explored several alternative visualization and interaction techniques, which allow more informed and flexible interaction with the mapping network. Crucially, we believe that there is no need for a single “correct” user interface; rather, different network representations and interaction approaches may be useful to different users, for different mapping tasks, or at different times.
 
-**Webmapper** currently includes eight different views. Following is a brief description of each view, including any view-specific interactions. For each, the name of the view is displayed along with the view's icon representation in the view selector widget, followed by the shortcut key displayed as `Command-N`.
+**Webmpr** currently includes eight different views. Following is a brief description of each view, including any view-specific interactions. For each, the name of the view is displayed along with the view's icon representation in the view selector widget, followed by the shortcut key displayed as `Command-N`.
 
 ### <img style="padding:0px;vertical-align:middle" src="./images/chord_icon_black.png" width="25px"> Chord view
 
@@ -222,7 +222,7 @@ This view presents a "console" for performing text-based interaction with the ma
 
 Status: planning
 
-[libmapper]: https://github.com/libmapper/libmapper
+[libmpr]: https://github.com/libmapper/libmapper
 [GDIF]: http://www.idmil.org/projects/gdif
 [ICon]: http://inputconf.sourceforge.net/
 [DOT]: http://idmil.org/dot

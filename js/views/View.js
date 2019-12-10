@@ -365,9 +365,9 @@ class View {
 
         function finish(convergent_method) {
             if (!self.escaped && self.draggingFrom && self.converging && convergent_method)
-                mapper.converge(self.draggingFrom.key, self.converging, convergent_method);
+                mpr.converge(self.draggingFrom.key, self.converging, convergent_method);
             else if (self.draggingFrom && self.snappingTo)
-                mapper.map(self.draggingFrom.key, self.snappingTo.key);
+                mpr.map(self.draggingFrom.key, self.snappingTo.key);
             self._unsnap_to_map();
             self.draggingFrom = null;
             if (self.newMap) {
@@ -782,9 +782,9 @@ class View {
                     function finish(convergent_method) {
                         if (!self.escaped) {
                             if (convergent_method !== null && self.snapping_to_map()) 
-                                mapper.converge(src.id, self.converging, convergent_method);
+                                mpr.converge(src.id, self.converging, convergent_method);
                             else if (src && src.id && dst && dst.id) 
-                                mapper.map(src.id, dst.id);
+                                mpr.map(src.id, dst.id);
                         }
                         // clean up
                         self.tables.left.highlightRow(null, true);
