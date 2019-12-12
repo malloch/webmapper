@@ -104,28 +104,15 @@ function init() {
 
     // Delay starting polling, because it results in a spinning wait
     // cursor in the browser.
-    let index = 0;
-    setInterval(
-        function() {
-            switch (index) {
-            case 0:
-                viewManager.on_resize();
-                mapProperties.clearMapProperties();
-                command.start();
-                command.send('refresh');
-                command.send('get_interfaces');
-                command.send('subscribe', 'all_devices');
-                command.send('add_devices');
-                break;
-            case 1:
-                command.send('add_signals');
-                break;
-            case 2:
-                command.send('add_maps');
-                window.clearInterval(this);
-            }
-            index += 1;
-        }, 250);
+    setTimeout(function() {
+        viewManager.on_resize();
+        mapProperties.clearMapProperties();
+        command.start();
+        command.send('refresh');
+        command.send('get_interfaces');
+        command.send('subscribe', 'all_devices');
+        command.send('add_devices');
+    }, 250);
 }
 
 /**
@@ -305,6 +292,11 @@ function initMapPropertiesCommands() {
     // updated the properties for a specific map
     $("#container").on("updateMapPropertiesFor", function(e, key) {
         mapProperties.updateMapPropertiesFor(key);
+    });
+
+    // send out any partially-edited properties when maps are deselected
+    $("#container").on("sendCachedProperty", function(e) {
+        mapProperties.sendCachedProperty();
     });
 }
 

@@ -79,18 +79,34 @@ def full_signame(sig):
 
 def map_props(map):
     props = map.properties.copy()
-    props['src'] = full_signame(map.signal(mpr.LOC_SRC))
-    props['dst'] = full_signame(map.signal(mpr.LOC_DST))
+    print("map_props", props)
+
+    # add source slot properties
     num_srcs = props['num_sigs_in']
-    props['srcs'] = [full_signame(map.signal(mpr.LOC_SRC, i))
-                     for i in range(0, num_srcs)]
-    props['srcs'].sort();
+    srcs = []
+    src_names = []
+    for i in range(0, num_srcs):
+        sig = map.signal(mpr.LOC_SRC, i)
+        src = sig.properties.copy()
+        src_name = full_signame(sig)
+        src['key'] = src_name
+        src_names.append(src_name)
+        srcs.append(src)
+    props['srcs'] = srcs
+
+    # add destination slot properties
+    sig = map.signal(mpr.LOC_DST)
+    dst_name = full_signame(sig)
+    dst = sig.properties.copy()
+    dst['key'] = dst_name
+    props['dst'] = dst
+
+    # generate key
     if num_srcs > 1:
-        props['key'] = '['+','.join(props['srcs'])+']' + '->' + '['+props['dst']+']'
-    else:
-        props['key'] = props['src'] + '->' + props['dst']
+        props['key'] = '['+','.join(src_names)+']' + '->' + '['+dst_name+']'
+    else: props['key'] = src_names[0] + '->' + dst_name
 
-
+    # translate some properties
     if props['process_loc'] == mpr.LOC_SRC:
         props['process_loc'] = 'src'
     else:
@@ -104,22 +120,10 @@ def map_props(map):
     props['status'] = 'active'
     props['id'] = str(props['id']) # if left as int js will lose precision & invalidate
     del props['is_local']
+    if 'mode' in props:
+        del props['mode']
 
-    slotprops = map.signal(mpr.LOC_SRC).properties
-    if 'min' in slotprops:
-        props['src_min'] = slotprops['min']
-    if 'max' in slotprops:
-        props['src_max'] = slotprops['max']
-    if 'calib' in slotprops:
-        props['src_calibrating'] = slotprops['calib']
-
-    slotprops = map.signal(mpr.LOC_DST).properties
-    if 'min' in slotprops:
-        props['dst_min'] = slotprops['min']
-    if 'max' in slotprops:
-        props['dst_max'] = slotprops['max']
-    if 'calib' in slotprops:
-        props['dst_calibrating'] = slotprops['calib']
+    print("map_props", props)
     return props
 
 def on_device(type, dev, action):
@@ -240,7 +244,7 @@ def get_interfaces(arg):
 def init_graph(arg):
     print('REFRESH!')
     global g
-    g.subscribe(mpr.DEV, -1)
+    g.subscribe(mpr.DEV)
 
     # remove old callbacks (if they are registered)
     g.remove_callback(on_device)
@@ -256,11 +260,13 @@ server.add_command_handler("add_devices",
                            lambda x: ("add_devices", [dev_props(d) for d in g.devices()]))
 
 def subscribe(device):
+    print('subscribe', device)
     if device == 'all_devices':
         g.subscribe(mpr.DEV)
     else:
         # todo: only subscribe to inputs and outputs as needed
         dev = g.devices().filter(mpr.PROP_NAME, device)
+        print('found dev:', dev)
         if dev:
             g.subscribe(dev.next(), mpr.OBJ)
 

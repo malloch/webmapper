@@ -52,7 +52,25 @@ NodeArray.prototype = {
         return total;
     },
 
-    each : function(func) {
+    some : function(func) {
+        let key;
+        for (key in this.contents) {
+            if (func(this.contents[key]))
+                return true;
+        }
+        return false;
+    },
+
+    every : function(func) {
+        let key;
+        for (key in this.contents) {
+            if (!func(this.contents[key]))
+                return false;
+        }
+        return true;
+    },
+
+    forEach : function(func) {
         let key;
         for (key in this.contents) {
             func(this.contents[key]);
@@ -133,7 +151,7 @@ NodeArray.prototype = {
         let key = obj.key;
         if (key && this.contents[key]) {
             if (this.signals)
-                this.signals.each(function(sig) { this.signals.remove(sig); });
+                this.signals.forEach(function(sig) { this.signals.remove(sig); });
             if (this.cb_func)
                 this.cb_func('removing', this.obj_type, this.contents[key]);
             delete this.contents[key];
@@ -181,7 +199,25 @@ EdgeArray.prototype = {
         return total;
     },
 
-    each : function(func) {
+    some : function(func) {
+        let key;
+        for (key in this.contents) {
+            if (func(this.contents[key]))
+                return true;
+        }
+        return false;
+    },
+
+    every : function(func) {
+        let key;
+        for (key in this.contents) {
+            if (!func(this.contents[key]))
+                return false;
+        }
+        return true;
+    },
+
+    forEach : function(func) {
         let key;
         for (key in this.contents) {
             func(this.contents[key]);
@@ -293,15 +329,19 @@ function Graph() {
     this.pathToImages = "images/";
 
     this.clearAll = function() {
-        this.maps.each(function(map) { this.maps.remove(map); });
-        this.links.each(function(link) { this.links.remove(link); });
-        this.devices.each(function(dev) { this.devices.remove(dev); });
+        this.maps.forEach(function(map) { this.maps.remove(map); });
+        this.links.forEach(function(link) { this.links.remove(link); });
+        this.devices.forEach(function(dev) { this.devices.remove(dev); });
     };
 
     this.add_devices = function(cmd, devs) {
+        let hidden = this.devices.some(d => d.hidden);
         for (var i in devs) {
-            this.devices.add(devs[i]);
-            command.send('subscribe', devs[i].name);
+            let dev = this.devices.add(devs[i]);
+            if (hidden)
+                dev.hidden = true;
+            console.log('subscribing to device', dev.name)
+            command.send('subscribe', dev.name);
         }
     }
     this.del_device = function(cmd, dev) {
@@ -309,14 +349,14 @@ function Graph() {
         if (!dev)
             return;
         let maps = this.maps;
-        dev.signals.each(function(sig) {
-            maps.each(function(map) {
+        dev.signals.forEach(function(sig) {
+            maps.forEach(function(map) {
                 if (map.srcs.indexOf(sig) >= 0 || sig == map.dst)
                     maps.remove(map);
             });
         });
         let links = this.links;
-        links.each(function(link) {
+        links.forEach(function(link) {
             if (link.src == dev || link.dst == dev)
                 links.remove(link);
         });
@@ -340,6 +380,7 @@ function Graph() {
             dev.signals.remove(sig);
     }
     this.find_signal = function(name) {
+        console.log('find_signal', name);
         name = name.split('/');
         if (name.length < 2) {
             console.log("error parsing signal name", name);
@@ -351,41 +392,30 @@ function Graph() {
     this.add_maps = function(cmd, maps) {
         // TODO: check for convergent maps and add appropriate links
         let self = this;
-        findSig = function(name) {
-            name = name.split('/');
-            if (name.length < 2) {
-                console.log("error parsing signal name", name);
-                return null;
-            }
-            let dev = self.devices.find(name[0]);
-            if (!dev) {
-                console.log("error finding signal: couldn't find device",
-                            name[0]);
-                return null;
-            }
-//            name.shift();
-            name = String(name.join('/'));
-            return dev.signals.find(name);
-        }
         for (var i in maps) {
-            let srcs = maps[i].srcs.map(s => findSig(s));
-            let dst = findSig(maps[i].dst);
-            if (!srcs.every(e => e) || !dst) {
+            console.log('trying to add map['+i+']', maps[i]);
+            for (j in maps[i].srcs) {
+                maps[i].srcs[j] = self.find_signal(maps[i].srcs[j].key)
+            }
+            maps[i].dst = self.find_signal(maps[i].dst.key);
+            if (!maps[i].srcs || !maps[i].dst) {
                 console.log("error adding map: couldn't find signals",
                             maps[i].srcs, maps[i].dst);
                 return;
             }
-            maps[i].srcs = srcs;
-            maps[i].dst = dst;
-//            maps[i].status = 'active';
+            // remove key from slots now that signal is known
+            maps[i].srcs.forEach(s => delete s.key);
+            delete maps[i].dst.key;
             let map = this.maps.add(maps[i]);
             if (!map) {
                 console.log("error adding map:", maps[i]);
                 return;
             }
 
-            for (var j in srcs) {
-                let src = srcs[j];
+            let dst = map.dst;
+            for (var j in map.srcs) {
+                let src = map.srcs[j];
+
                 let link_key;
                 let rev = false;
                 if (src.device.name < dst.device.name)
@@ -448,142 +478,6 @@ function Graph() {
         }
         this.maps.remove(map);
     }
-    this.loadFile = function(file) {
-        this.fileCounter++;
-        let self = this;
-
-        upgradeFile = function(file) {
-            // update to version 2.2
-            file.mapping.maps = [];
-            for (var i in file.mapping.connections) {
-                let c = file.mapping.connections[i];
-                let map = {};
-                let src = {'name': c.source[0].slice(1)};
-                let dst = {'name': c.destination[0].slice(1)};
-                if (c.mute != null)
-                    map.muted = c.mute ? true : false;
-                if (c.expression != null)
-                    map.expr = c.expression.replace('s[', 'src[')
-                    .replace('d[', 'dst[');
-                if (c.srcMin != null)
-                    src.minimum = c.srcMin;
-                if (c.srcMax != null)
-                    src.maximum = c.srcMax;
-                if (c.dstMin != null)
-                    dst.minimum = c.dstMin;
-                if (c.dstMax != null)
-                    dst.maximum = c.dstMax;
-
-                if (c.mode == 'reverse') {
-                    map.expr = 'y=x';
-                    map.sources = [dst];
-                    map.destinations = [src];
-                }
-                else {
-                    if (c.mode == 'calibrate') {
-                        map.mode = 'linear';
-                        dst.calibrating = true;
-                    }
-                    else
-                        map.mode = c.mode;
-                    map.sources = [src];
-                    map.destinations = [dst];
-                }
-                file.mapping.maps.push(map);
-            }
-            delete file.mapping.connections;
-            file.fileversion = "2.2";
-        }
-
-        addSigDev = function(obj) {
-            let name = obj.name.split('/');
-            if (name.length < 2) {
-                console.log("error parsing signal name", name);
-                return null;
-            }
-//            name[0] = self.fileCounter+':'+name[0];
-            let dev = self.devices.add({'key': self.fileCounter+':'+name[0],
-                                        'name': name[0],
-                                        'status': 'offline',
-                                        'file': self.fileCounter
-                                       });
-            obj.key = name.join('/');
-            obj.status = 'offline';
-            obj.device = dev;
-            return dev.signals.add(obj);
-        }
-
-        if (file.fileversion != "2.2")
-            upgradeFile(file);
-
-        for (var i in file.mapping.maps) {
-            let map = file.mapping.maps[i];
-            // TODO: enable multiple sources and destinations
-            let src = addSigDev(map.sources[0]);
-            let dst = addSigDev(map.destinations[0]);
-            if (!src || !dst) {
-                console.log("error adding map from file:", map);
-                continue;
-            }
-            if (map.sources[0].calibrating)
-                map.src_calibrating = map.sources[0].calibrating;
-            if (map.destinations[0].calibrating)
-                map.dst_calibrating = map.destinations[0].calibrating;
-            if (map.sources[0].min)
-                map.src_min = map.sources[0].min;
-            if (map.sources[0].max)
-                map.src_max = map.sources[0].max;
-            if (map.destinations[0].min)
-                map.dst_min = map.destinations[0].min;
-            if (map.destinations[0].max)
-                map.dst_max = map.destinations[0].max;
-            delete map.sources;
-            delete map.destinations;
-            map.srcs = [src];
-            map.dst = dst;
-            map.status = 'offline';
-            if (map.expr) {
-                // fix expression
-                // TODO: better regexp to avoid conflicts with user vars
-                map.expr = map.expr.replace(/src/g, "x");
-                map.expr = map.expr.replace(/dst/g, "y");
-            }
-            console.log("loaded map src: ", src, " dst: ", dst);
-            this.maps.add(map);
-
-            // may need to also add link
-            let link_key;
-            let rev = false;
-            if (src.device.name < dst.device.name)
-                link_key = src.device.name + '<->' + dst.device.name;
-            else {
-                link_key = dst.device.name + '<->' + src.device.name;
-                rev = true;
-            }
-            let link = this.links.find(link_key);
-            if (!link) {
-                link = this.links.add({'key': link_key,
-                                       'src': rev ? dst.device : src.device,
-                                       'dst': rev ? src.device : dst.device,
-                                       'maps': [map.key],
-                                       'status': 'offline'});
-                if (src.device.links)
-                    src.device.links.push(link_key);
-                else
-                    src.device.links = [link_key];
-                if (dst.device.links)
-                    dst.device.links.push(link_key);
-                else
-                    dst.device.links = [link_key];
-            }
-            else if (!link.maps.includes(map.key))
-                link.maps.push(map.key);
-            if (link.status != 'active' && map.status == 'active') {
-                link.status = 'active';
-                this.links.cb_func('modified', 'link', link);
-            }
-        }
-    }
 
     this.exportFile = function() {
         let file = { "fileversion": "2.2",
@@ -591,23 +485,55 @@ function Graph() {
                      "views": { "signals": []} };
         let numMaps = 0;
 
-        this.maps.each(function(map) {
+        this.maps.forEach(function(map) {
             // currently only includes maps with views
             if (!map.view)
                 return;
             let m = {'sources': [], 'destinations': []};
+            let obj;
             for (var i in map.srcs) {
-                m.sources.push({'name': map.srcs[i].key,
-                                'direction': map.srcs[i].direction});
+                let src = map.srcs[i];
+                obj = {'name': src.key};
+                for (var attr in src) {
+                    if (!src.hasOwnProperty(attr))
+                        break;
+                    switch (attr) {
+                        case 'signal':
+                            break;
+                        case 'min':
+                        case 'max':
+                            obj[attr + 'imum'] = src[attr];
+                            break;
+                        default:
+                            obj[attr] = src[attr];
+                    }
+                }
+                m.sources.push(obj);
             }
-            m.destinations.push({'name': map.dst.key,
-                                 'direction': map.dst.direction});
+            obj = {'name': map.dst.key};
+            for (var attr in map.dst) {
+                if (!src.hasOwnProperty(attr))
+                    break;
+                switch (attr) {
+                    case 'signal':
+                        break;
+                    case 'min':
+                    case 'max':
+                        obj[attr + 'imum'] = src[attr];
+                        break;
+                    default:
+                        obj[attr] = src[attr];
+                }
+            }
+            m.destinations.push(obj);
             for (var attr in map) {
                 switch (attr) {
                     // ignore a few properties
-                    case 'view':
-                    case 'status':
+                    case 'hidden':
+                    case 'id':
                     case 'key':
+                    case 'status':
+                    case 'view':
                         break;
                     case 'src':
                     case 'srcs':
@@ -621,7 +547,7 @@ function Graph() {
                         expr = expr.replace(/y\s*=/g, "dst=");
                         expr = expr.replace(/x\[/g, "src[");
                         expr = expr.replace(/\bx(?!\w)/g, "src[0]");
-                        m.expr = expr;
+                        m.expression = expr;
                         break;
                     case 'process_location':
                         let loc = map[attr];
@@ -633,22 +559,7 @@ function Graph() {
                     default:
                         if (!map.hasOwnProperty(attr))
                             break;
-                        if (attr.startsWith('src_')) {
-                            let key = attr.slice(4);
-                            if (key == 'min' || key == 'max')
-                                m.sources[0][key + 'imum'] = map[attr];
-                            else
-                                m.sources[0][key] = map[attr];
-                        }
-                        else if (attr.startsWith('dst_')) {
-                            let key = attr.slice(4);
-                            if (key == 'min' || key == 'max')
-                                m.destinations[0][key + 'imum'] = map[attr];
-                            else
-                                m.destinations[0][key] = map[attr];
-                        }
-                        else
-                            m[attr] = map[attr];
+                        m[attr] = map[attr];
                         break;
                 }
             }
@@ -657,8 +568,8 @@ function Graph() {
         });
         if (!numMaps)
             alert("No maps to save!");
-        this.devices.each(function(dev) {
-            dev.signals.each(function(sig) {
+        this.devices.forEach(function(dev) {
+            dev.signals.forEach(function(sig) {
                 if (sig.canvasObject)
                     file.views.signals.push({'name': sig.key,
                                              'position': sig.canvasObject});
@@ -723,55 +634,47 @@ function Graph() {
 
         for (var i in file.mapping.maps) {
             let map = file.mapping.maps[i];
-            // TODO: enable multiple sources and destinations
-            
             let srcs = map.sources.map(s => s.name);
-            let src = map.sources[0].name;
             let dst = map.destinations[0].name;
             console.log('Map from file:', srcs,'->',dst);
-            if (!src || !dst) {
+            if (!srcs || !dst) {
                 console.log("error adding map from file:", map);
                 continue;
             }
-            if (map.sources[0].calibrating)
-                map.src_calibrating = map.sources[0].calibrating;
-            if (map.destinations[0].calibrating)
-                map.dst_calibrating = map.destinations[0].calibrating;
-            if (map.sources[0].min)
-                map.src_min = map.sources[0].min;
-            else if (map.sources[0].minimum)
-                map.src_min = map.sources[0].minimum;
-            if (map.sources[0].max)
-                map.src_max = map.sources[0].max;
-            else if (map.sources[0].maximum)
-                map.src_max = map.sources[0].maximum;
-            if (map.destinations[0].min)
-                map.dst_min = map.destinations[0].min;
-            else if (map.destinations[0].minimum)
-                map.dst_min = map.destinations[0].minimum;
-            if (map.destinations[0].max)
-                map.dst_max = map.destinations[0].max;
-            else if (map.destinations[0].maximum)
-                map.dst_max = map.destinations[0].maximum;
+            map.srcs = map.sources;
+            map.dst = map.destinations;
+            if (Array.isArray(map.dst))
+                map.dst = map.dst[0];
             delete map.sources;
             delete map.destinations;
-            map.srcs = [src];
-            map.dst = dst;
-            //map.status = 'offline'; //
-            if (map.expr) {
+            if (map.expression) {
                 // fix expression
                 // TODO: better regexp to avoid conflicts with user vars
-                map.expr = map.expr.replace('src[0]', "x")
-                                   .replace('dst[0]', "y")
-                                   .replace('dst', "y");
+                map.expr = map.expression.replace('src[0]', "x")
+                                         .replace('dst[0]', "y")
+                                         .replace('dst', "y");
+                delete map.expression;
+//                console.log(map.expr)
             }
-            console.log(map.expr)
+
+            // fix extrema property names
+            function fix_extrema(slot) {
+                if (slot.maximum !== undefined) {
+                    slot.max = slot.maximum;
+                    delete slot.maximum;
+                }
+                if (slot.minimum !== undefined) {
+                    slot.min = slot.minimum;
+                    delete slot.minimum;
+                }
+            }
+            map.srcs.forEach(s => fix_extrema(s));
+            fix_extrema(map.dst);
 
             srcs = srcs.map(s => s.slice(s.indexOf('/')));
-            src = src.slice(src.indexOf('/'));
             dst = dst.slice(dst.indexOf('/'));
             let self = this;
-            this.devices.each(function(d1) {
+            this.devices.forEach(function(d1) {
                 if (d1.hidden)
                     return;
                 let srcsigs = srcs.map(s => {
@@ -784,7 +687,7 @@ function Graph() {
                 if (!srcsigs.every(s => typeof s.key === 'string'))
                     return;
                 let dstsig = null;
-                self.devices.each(function (d2) {
+                self.devices.forEach(function (d2) {
                     if (d2.hidden)
                         return;
                     dstsig = d2.signals.find(d2.name+dst);

@@ -61,17 +61,17 @@ class GraphView extends View {
         this.tables.left.hidden = this.tables.right.hidden = true;
 
         // remove associated svg elements for devices
-        this.graph.devices.each(function(dev) {
+        this.graph.devices.forEach(function(dev) {
             remove_object_svg(dev);
             // vectorize signal positions
-            dev.signals.each(function(sig) {
+            dev.signals.forEach(function(sig) {
                 if (!Array.isArray(sig.position))
                     sig.position = [sig.position];
             });
         });
 
         // remove link svg
-        this.graph.links.each(remove_object_svg);
+        this.graph.links.forEach(remove_object_svg);
 
         this._labelAxes();
 
@@ -184,7 +184,7 @@ class GraphView extends View {
     updatePropLists() {
         let devProps = [];
         let sigProps = [];
-        this.graph.devices.each(function (dev) {
+        this.graph.devices.forEach(function (dev) {
             let keys = Object.keys(dev);
             for (var i in keys) {
                 let key = keys[i];
@@ -208,7 +208,7 @@ class GraphView extends View {
                             devProps.push('device '+key);
                 }
             }
-            dev.signals.each(function (sig) {
+            dev.signals.forEach(function (sig) {
                 let keys = Object.keys(sig);
                 for (var i in keys) {
                     let key = keys[i];
@@ -286,8 +286,8 @@ class GraphView extends View {
         while (rangeChanged && iterations < 10) {
             iterations += 1;
             rangeChanged = false;
-            this.graph.devices.each(function(dev) {
-                dev.signals.each(function(sig) {
+            this.graph.devices.forEach(function(dev) {
+                dev.signals.forEach(function(sig) {
                     if (dev.hidden || sig.hidden) {
                         if (sig.view) {
                             sig.view.hide();
@@ -500,9 +500,9 @@ class GraphView extends View {
             return match / len * 0.75 + 0.01;
         }
 
-        this.graph.devices.each(function(devA) {
+        this.graph.devices.forEach(function(devA) {
             // attract positions towards targets
-            devA.signals.each(function(sig) {
+            devA.signals.forEach(function(sig) {
                 if (!sig.view || sig.hidden || !sig.target)
                     return;
                 for (var i in sig.position) {
@@ -518,14 +518,14 @@ class GraphView extends View {
             });
             // repel signal positions
             let nSig = (devA['num_sigs_out'] + devA['num_sigs_in']) * 0.25;
-            devA.signals.each(function(sigA) {
+            devA.signals.forEach(function(sigA) {
                 if (!sigA.view || sigA.hidden || !sigA.target)
                     return;
                 let pA = sigA.position;
                 let fA = sigA.force;
                 let found = false;
-                self.graph.devices.each(function(devB) {
-                    devB.signals.each(function(sigB) {
+                self.graph.devices.forEach(function(devB) {
+                    devB.signals.forEach(function(sigB) {
                         if (!sigB.view || sigB.hidden || !sigB.target)
                             return;
                         if (found === true) {
@@ -533,11 +533,10 @@ class GraphView extends View {
                             let fB = sigB.force;
                             let mapped = false;
                             // check if signals are mapped
-                            self.graph.maps.each(function(map) {
-                                let srcsigs = map.srcs.map(s => s.signal);
-                                if (srcsigs.indexOf(sigA) != -1 && map.dst == sigB)
+                            self.graph.maps.forEach(function(map) {
+                                if (map.srcs.indexOf(sigA) != -1 && map.dst == sigB)
                                     mapped = true;
-                                else if (map.dst == sigA && srcsigs.indexOf(sigB) != -1)
+                                else if (map.dst == sigA && map.srcs.indexOf(sigB) != -1)
                                     mapped = true;
                             });
                             for (var i in pA) {
@@ -730,8 +729,8 @@ class GraphView extends View {
                   .animate({opacity: 0}, {duration: 2000});
         this.stopStepping()
         // for now, restore signal positions to singular value
-        this.graph.devices.each(function(dev) {
-            dev.signals.each(function(sig) {
+        this.graph.devices.forEach(function(dev) {
+            dev.signals.forEach(function(sig) {
                 if (Array.isArray(sig.position))
                     sig.position = sig.position[0];
                 if (sig.target)

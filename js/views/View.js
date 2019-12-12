@@ -100,10 +100,10 @@ class View {
 
         let self = this;
         let devIndex = 0;
-        this.graph.devices.each(function(dev) {
+        this.graph.devices.forEach(function(dev) {
             // update device signals
             let sigIndex = 0;
-            dev.signals.each(function(sig) {
+            dev.signals.forEach(function(sig) {
                 sig.hidden = (dev.hidden == true);
                 let re = sig.direction == 'output' ? self.graph.srcRE : self.graph.dstRE;
                 if (dev.hidden || (re && !re.test(sig.key))) {
@@ -186,7 +186,7 @@ class View {
                     self.showDevLabel(self, dev, e);
                     if (self.type == 'chord') {
                         // also move associated  links to front
-                        self.graph.links.each(function(link) {
+                        self.graph.links.forEach(function(link) {
                             if (link.view && (link.src == dev || link.dst == dev))
                                 link.view.toFront();
                         });
@@ -249,11 +249,11 @@ class View {
 
     updateLinks() {
         let self = this;
-        this.graph.devices.each(function(dev) {
+        this.graph.devices.forEach(function(dev) {
             dev.linkSrcIndices = [];
             dev.linkDstIndices = [];
         });
-        this.graph.links.each(function(link) {
+        this.graph.links.forEach(function(link) {
             let src = link.src;
             let dst = link.dst;
             if (!src.linkDstIndices.includes(dst.index)) {
@@ -426,8 +426,8 @@ class View {
 
     setAllSigHandlers() {
         let self = this;
-        this.graph.devices.each(dev =>
-            dev.signals.each(sig => {
+        this.graph.devices.forEach(dev =>
+            dev.signals.forEach(sig => {
                 if (!sig.view) return;
                 self.setSigHover(sig);
                 self.setSigDrag(sig);
@@ -437,8 +437,8 @@ class View {
 
     updateSignals(func) {
         let self = this;
-        this.graph.devices.each(function(dev) {
-            dev.signals.each(function(sig) {
+        this.graph.devices.forEach(function(dev) {
+            dev.signals.forEach(function(sig) {
                 if (sig.view)
                     sig.view.stop();
 
@@ -491,10 +491,10 @@ class View {
 
     drawSignals(duration) {
         let self = this;
-        this.graph.devices.each(function(dev) {
+        this.graph.devices.forEach(function(dev) {
             if (dev.hidden)
                 return;
-            dev.signals.each(function(sig) {
+            dev.signals.forEach(function(sig) {
                 self.drawSignal(sig, duration);
             });
         });
@@ -526,7 +526,7 @@ class View {
 
     updateMaps() {
         let self = this;
-        this.graph.maps.each(function(map) {
+        this.graph.maps.forEach(function(map) {
             map.hidden = map.srcs.some(s => s.hidden) || map.dst.hidden;
             if (map.hidden) {
                 remove_object_svg(map);
@@ -540,7 +540,7 @@ class View {
     }
 
     drawMaps(duration, signal) {
-        this.graph.maps.each(function(map) {
+        this.graph.maps.forEach(function(map) {
             if (!map.view)
                 return;
             if (signal && map.srcs.every(s => s != signal) && map.dst != signal)
@@ -868,7 +868,7 @@ class View {
     _get_map_snap(x1, y1, x2, y2)
     {
         let converging = null;;
-        this.graph.maps.each(function(map) {
+        this.graph.maps.forEach(function(map) {
             if (converging !== null) return;
             if (map.view && map.view.edge_intersection(x1, y1, x2, y2))
                 converging = map;
@@ -885,7 +885,7 @@ class View {
 
     _snap_to_map(snap_map)
     {
-        this.graph.maps.each(map => map.selected = false);
+        this.graph.maps.forEach(map => map.selected = false);
         if (this.snapping_to_map()) this.converging.view.draw(0); // unhighlight
         this.converging = snap_map;
         this.converging.selected = true;
@@ -924,7 +924,7 @@ class View {
     setMapPainter(painter) {
         this.mapPainter = (painter === "undefined") ? MapPainter : painter;
         let self = this;
-        this.graph.maps.each(function(map) {
+        this.graph.maps.forEach(function(map) {
             if (!map.view) return;
             let newview = new self.mapPainter(map, self.canvas, self.frame, self.graph);
             newview.copy(map.view);

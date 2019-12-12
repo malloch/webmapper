@@ -21,13 +21,13 @@ class LinkView extends View {
         this.tables.right.showDetail(false);
 
         // remove associated svg elements for signals
-        this.graph.devices.each(function(dev) {
+        this.graph.devices.forEach(function(dev) {
             if (dev.view && dev.view.label)
                 dev.view.label.remove();
-            dev.signals.each(function(sig) { remove_object_svg(sig); });
+            dev.signals.forEach(function(sig) { remove_object_svg(sig); });
         });
         // remove associated svg elements for maps
-        this.graph.maps.each(function(map) { remove_object_svg(map); });
+        this.graph.maps.forEach(function(map) { remove_object_svg(map); });
 
         this.pan = this.tablePan;
         this.zoom = this.tableZoom;
@@ -71,7 +71,7 @@ class LinkView extends View {
 
         let self = this;
 
-        this.graph.links.each(function(link) {
+        this.graph.links.forEach(function(link) {
             if (!link.view)
                 return;
             link.view.stop();
@@ -120,7 +120,7 @@ class LinkView extends View {
 
     drawDevices(duration) {
         let self = this;
-        this.graph.devices.each(function(dev) {
+        this.graph.devices.forEach(function(dev) {
             if (!dev.view || !dev.tableIndices || !dev.tableIndices.length)
                 return;
             dev.view.stop();
@@ -158,10 +158,10 @@ class LinkView extends View {
         this.tables.left.collapseAll = false;
         this.tables.right.collapseAll = false;
 
-        this.graph.devices.each(function(dev) {
+        this.graph.devices.forEach(function(dev) {
             delete dev.linkSrcIndices;
             delete dev.linkDstIndices;
         });
-        this.graph.links.each(remove_object_svg);
+        this.graph.links.forEach(remove_object_svg);
     }
 }

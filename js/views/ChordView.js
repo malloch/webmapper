@@ -36,16 +36,16 @@ class ChordView extends View {
         this.tables.left.hidden = this.tables.right.hidden = true;
 
         let self = this;
-        this.graph.devices.each(function(dev) {
+        this.graph.devices.forEach(function(dev) {
             if (dev.view) {
                 self.setDevClick(dev);
                 self.setDevHover(dev);
             }
             // remove associated svg elements for signals
-            dev.signals.each(function(sig) { remove_object_svg(sig); });
+            dev.signals.forEach(function(sig) { remove_object_svg(sig); });
         });
         // remove associated svg elements for maps
-        this.graph.maps.each(function(map) { remove_object_svg(map); });
+        this.graph.maps.forEach(function(map) { remove_object_svg(map); });
 
         this.updateDevices();
         this.resize();
@@ -77,7 +77,7 @@ class ChordView extends View {
         let self = this;
         this.onlineDevs = 0;
         this.offlineDevs = 0;
-        this.graph.devices.each(function(dev) {
+        this.graph.devices.forEach(function(dev) {
             if (dev.status == 'offline')
                 self.offlineDevs++;
             else
@@ -97,7 +97,7 @@ class ChordView extends View {
 
         let cx = this.mapPane.cx;
         let cy = this.mapPane.cy;
-        this.graph.devices.each(function(dev) {
+        this.graph.devices.forEach(function(dev) {
             let offline = (dev.status == 'offline');
             let r = self.radius ? self.radius : 0;
 
@@ -174,11 +174,11 @@ class ChordView extends View {
             }
             else if (hidden === 0) {
                 // 'solo' this device by hiding all others
-                self.graph.devices.each(d => d.hidden = (d !== dev));
+                self.graph.devices.forEach(d => d.hidden = (d !== dev));
             }
             else if (hidden === self.graph.devices.size() - 1) {
                 // unhide all devices
-                self.graph.devices.each(d => d.hidden = false);
+                self.graph.devices.forEach(d => d.hidden = false);
             }
             else
                 dev.hidden = true;
@@ -354,7 +354,7 @@ class ChordView extends View {
 
     drawDevices(duration) {
         let self = this;
-        this.graph.devices.each(function(dev) {
+        this.graph.devices.forEach(function(dev) {
             self.drawDevice(dev, duration, self);
         });
     }
@@ -362,10 +362,10 @@ class ChordView extends View {
     updateLinks() {
         let self = this;
         let tau = Math.PI * 2.0;
-        this.graph.devices.each(function(dev) {
+        this.graph.devices.forEach(function(dev) {
             dev.link_angles = [];
         });
-        this.graph.links.each(function(link) {
+        this.graph.links.forEach(function(link) {
             let src = link.src;
             let dst = link.dst;
             if (!src.view || !dst.view || src == dst)
@@ -378,7 +378,7 @@ class ChordView extends View {
                 dst.link_angles.push(src.view.pstart.angle);
             }
         });
-        this.graph.devices.each(function(dev) {
+        this.graph.devices.forEach(function(dev) {
             if (!dev.link_angles || dev.link_angles.length <= 1)
                 return;
             // sort
@@ -401,7 +401,7 @@ class ChordView extends View {
                 a.push.apply(a, a.splice(0, i));
             }
         });
-        this.graph.links.each(function(link) {
+        this.graph.links.forEach(function(link) {
             let src = link.src;
             let dst = link.dst;
             if (!link.view) {
@@ -581,7 +581,7 @@ class ChordView extends View {
     drawLinks(duration) {
         let self = this;
 
-        this.graph.links.each(function(link) {
+        this.graph.links.forEach(function(link) {
             self.drawLink(link, duration, self);
         });
     }
@@ -619,12 +619,12 @@ class ChordView extends View {
 
     cleanup() {
         super.cleanup();
-        graph.links.each(function(link) {
+        graph.links.forEach(function(link) {
             if (!link.view)
                 return;
             remove_object_svg(link, 200);
         });
-        graph.devices.each(function(dev) {
+        graph.devices.forEach(function(dev) {
             if (!dev.view)
                 return;
             if (dev.view.stick) {

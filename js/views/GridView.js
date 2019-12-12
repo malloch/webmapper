@@ -37,8 +37,8 @@ class GridView extends View {
         }
 
         let self = this;
-        this.graph.devices.each(function(dev) {
-            dev.signals.each(remove_object_svg);
+        this.graph.devices.forEach(function(dev) {
+            dev.signals.forEach(remove_object_svg);
             remove_object_svg(dev);
         });
 
@@ -150,8 +150,8 @@ class GridView extends View {
         $('svg').css({'left': 0,
                       'top': 0});
 
-        this.graph.devices.each(function(dev) {
-            dev.signals.each(function(sig) {
+        this.graph.devices.forEach(function(dev) {
+            dev.signals.forEach(function(sig) {
                 if (sig.view) {
                     delete sig.view;
                     sig.view = null;

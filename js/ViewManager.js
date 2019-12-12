@@ -29,8 +29,8 @@ class ViewManager
         this.pie = new Pie(this.canvas, ConvergentMappingSlices);
 
         let self = this;
-        this.graph.devices.each(function(dev) { self._update_devices(dev, 'added'); });
-        this.graph.maps.each(function(map) { self._update_maps(map, 'added'); });
+        this.graph.devices.forEach(function(dev) { self._update_devices(dev, 'added'); });
+        this.graph.maps.forEach(function(map) { self._update_maps(map, 'added'); });
 
         this.currentView = null;
         setTimeout(function() {
@@ -193,7 +193,7 @@ class ViewManager
 
     _update_devices(dev, event) {
         if (event == 'added' && !dev.view) {
-            dev.signals.each(function(sig) {
+            dev.signals.forEach(function(sig) {
                 this._update_signals(sig, 'added', false);
             });
             this.views[this.currentView].update('devices');
@@ -257,7 +257,7 @@ class ViewManager
 
             // check for edge intersections around point for 'click' selection
             let updated = false;
-            self.graph.maps.each(function(map) {
+            self.graph.maps.forEach(function(map) {
                 if (!map.view || map.selected)
                     return;
                 if (   map.view.edge_intersection(x1-3, y1-3, x1+3, y1+3)
@@ -281,7 +281,7 @@ class ViewManager
 
                 // check for edge intersections for 'cross' selection
                 updated = false;
-                self.graph.maps.each(function(map) {
+                self.graph.maps.forEach(function(map) {
                     if (!map.view || map.selected)
                         return;
                     if (map.view.edge_intersection(x1, y1, x2, y2)) {
@@ -316,7 +316,7 @@ class ViewManager
                     /* delete */
                     // do not allow 'delete' key to unmap in console view
                     if (self.currentView == 'console') break;
-                    self.graph.maps.each(function(map) {
+                    self.graph.maps.forEach(function(map) {
                         if (map.selected)
                         {
                             let srcs = map.srcs.map(s => s.key);

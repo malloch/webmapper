@@ -35,8 +35,8 @@ class ListView extends View {
         }
 
         let self = this;
-        this.graph.devices.each(function(dev) {
-            dev.signals.each(remove_object_svg);
+        this.graph.devices.forEach(function(dev) {
+            dev.signals.forEach(remove_object_svg);
             if (!dev.view)
                 return;
             dev.view.unhover();
@@ -109,8 +109,8 @@ class ListView extends View {
     cleanup() {
         super.cleanup();
 
-        this.graph.devices.each(function(dev) {
-            dev.signals.each(function(sig) {
+        this.graph.devices.forEach(function(dev) {
+            dev.signals.forEach(function(sig) {
                 if (sig.view) {
                     delete sig.view;
                     sig.view = null;
