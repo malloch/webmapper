@@ -85,8 +85,7 @@ def map_props(map):
     num_srcs = props['num_sigs_in']
     srcs = []
     src_names = []
-    for i in range(0, num_srcs):
-        sig = map.signal(mpr.LOC_SRC, i)
+    for sig in map.signals(mpr.LOC_SRC):
         src = sig.properties.copy()
         src_name = full_signame(sig)
         src['key'] = src_name
@@ -95,11 +94,11 @@ def map_props(map):
     props['srcs'] = srcs
 
     # add destination slot properties
-    sig = map.signal(mpr.LOC_DST)
-    dst_name = full_signame(sig)
-    dst = sig.properties.copy()
-    dst['key'] = dst_name
-    props['dst'] = dst
+    for sig in map.signals(mpr.LOC_DST):
+        dst = sig.properties.copy()
+        dst_name = full_signame(sig)
+        dst['key'] = dst_name
+        props['dst'] = dst
 
     # generate key
     if num_srcs > 1:
@@ -151,7 +150,7 @@ def on_map(type, map, action):
 
 def find_sig(fullname):
     print('trying to split', fullname)
-    names = fullname.decode().split('/', 1)
+    names = fullname.split('/', 1)
     dev = g.devices().filter(mpr.PROP_NAME, names[0]).next()
     if dev:
         sig = dev.signals().filter(mpr.PROP_NAME, names[1]).next()
@@ -180,8 +179,10 @@ def find_map(srckeys, dstkey):
     return None
 
 def set_map_properties(props, map):
-    if not map:
+    print('set_map_properties:', props, map)
+    if map == None:
         map = find_map(props['srcs'], props['dst'])
+        print('found map with', props['srcs'], props['dst'])
         if not map:
             print("error: couldn't retrieve map ", props['src'], " -> ", props['dst'])
             return

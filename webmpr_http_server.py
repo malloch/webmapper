@@ -347,10 +347,6 @@ def handler_send_command(out, args):
         raise e
         return
 
-    # JSON decoding returns unicode which doesn't work well with
-    # our C library, so convert any strings to str.
-    vals['args'] = deunicode(vals['args'])
-
     res = h(vals['args'])
     if res:
         out.write(json.dumps({"cmd": res[0],
@@ -389,22 +385,6 @@ handlers = {'/': [handler_page, 'html'],
             '/save': [handler_save, 'dl']}
 
 cmd_handlers = {}
-
-def deunicode(o):
-    d = dir(o)
-    if o.__class__==str:
-        p = o.encode('ascii','replace')
-    elif 'items' in d:
-        p = dict([(deunicode(x),deunicode(y)) for (x,y) in list(o.items())])
-    elif '__dict__' in d:
-        p = o.copy()
-        p.__dict__ = dict([(deunicode(x),deunicode(y))
-                           for (x,y) in list(o.__dict__.items())])
-    elif '__iter__' in d:
-        p = [deunicode(x) for x in o]
-    else:
-        p = o
-    return p
 
 def send_command(cmd, args):
     message_pipe.put((cmd, args))

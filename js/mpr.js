@@ -74,7 +74,7 @@ class Mpr
     _mapExists(srckey, dstkey)
     {
         let exists = false;
-        graph.maps.each(function(map)
+        graph.maps.forEach(function(map)
         {
             if (exists) return;
             if (map.dst.key != dstkey) return;
@@ -276,7 +276,7 @@ class ConvergentMpr
     _findOverlap(srckeys, dstkey)
     {
         let overlapmap = null;
-        graph.maps.each(function(map) {
+        graph.maps.forEach(function(map) {
             if (overlapmap !== null && map.srcs.length == 1) return;
             for (let src1 of map.srcs)
             {

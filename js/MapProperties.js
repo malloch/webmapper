@@ -298,7 +298,7 @@ class MapProperties {
         else
             return;
 
-        selected.each(function(map) {
+        selected.forEach(function(map) {
             if (proto == null)
                 proto = map.protocol;
             else if (proto != map.protocol)
@@ -392,7 +392,7 @@ class MapProperties {
     setMapProperty(key, value) {
         let container = $(this.container);
         let modes = this.mapModeCommands;
-        this.graph.maps.filter(this.selected).each(function(map) {
+        this.graph.maps.filter(this.selected).forEach(function(map) {
             if (map[key] && (map[key] == value || map[key] == parseFloat(value)))
                 return;
 
@@ -477,7 +477,7 @@ class MapProperties {
             // Split them into sources and destinations
             var srcdevs = [];
             var dstdevs = [];
-            this.graph.devices.each(function(dev) {
+            this.graph.devices.forEach(function(dev) {
                 if (devs.includes(dev.name)) {
                     if (dev.num_sigs_out)
                         srcdevs.push(dev.name);

@@ -403,9 +403,6 @@ function Graph() {
                             maps[i].srcs, maps[i].dst);
                 return;
             }
-            // remove key from slots now that signal is known
-            maps[i].srcs.forEach(s => delete s.key);
-            delete maps[i].dst.key;
             let map = this.maps.add(maps[i]);
             if (!map) {
                 console.log("error adding map:", maps[i]);
