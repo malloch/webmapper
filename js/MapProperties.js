@@ -87,6 +87,8 @@ class MapProperties {
     });
 
     $("body").on("keydown", function (e) {
+      if (self.editor.hasFocus() == true)
+        return;
       if (e.which == 67) {
         // 'C'
         let selected = self.graph.maps.filter((m) => m.selected);
