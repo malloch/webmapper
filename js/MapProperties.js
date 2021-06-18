@@ -29,6 +29,7 @@ class MapProperties {
     this.editor = CodeMirror(document.querySelector("#editor"), {
       lineNumbers: true,
       tabSize: 2,
+      theme: "material-darker",
       value: "",
     });
     /*
