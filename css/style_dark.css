@@ -318,17 +318,6 @@ form {
     height: 100%;
 }
 
-.rangeSwitch {
-    width: 20px;
-    height: 20px;
-    background: url(/images/range_switch_white.png);
-    background-repeat: no-repeat;
-    cursor: pointer;
-    border: none;
-    position: relative;
-    top: 0px;
-}
-
 .calibrate, .setlinear {
     cursor: pointer;
 }
