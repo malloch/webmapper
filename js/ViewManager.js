@@ -96,10 +96,6 @@ class ViewManager
         else {
             let view;
             switch (viewType) {
-                case 'balloon':
-                    view = new BalloonView(this.frame, this.tables, this.canvas,
-                                           this.graph, this.tooltip, this.pie);
-                    break;
                 case 'canvas':
                     view = new CanvasView(this.frame, this.tables, this.canvas,
                                           this.graph, this.tooltip, this.pie);
