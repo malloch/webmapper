@@ -35,33 +35,14 @@ jobs:
       run:
         pip3 install libmapper
         && pip3 install netifaces
-        && pip3 install pyinstaller
+        && pip3 install py2app
     - name: build standalone
       run:
-        pyinstaller webmapper.spec
+        python setup.py py2app
     - uses: actions/upload-artifact@v3
       with:
         name: webmapper-macosx-standalone
-        path: dist/webmapper
-
-  MacOS-10:
-    runs-on: macOS-10.15
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-    - name: install dependencies
-      run:
-        pip3 install libmapper
-        && pip3 install netifaces
-        && pip3 install pyinstaller
-    - name: build standalone
-      run:
-        pyinstaller webmapper.spec
-    - uses: actions/upload-artifact@v3
-      with:
-        name: webmapper-macosx-10-standalone
-        path: dist/webmapper
+        path: dist
 
   Windows-Latest:
     runs-on: windows-latest
