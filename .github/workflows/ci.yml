@@ -33,8 +33,7 @@ jobs:
         fetch-depth: 0
     - name: install dependencies
       run:
-        pip3 install liblo
-        && pip3 install libmapper
+        pip3 install libmapper
         && pip3 install netifaces
         && pip3 install py2app
         && pip3 list
@@ -58,6 +57,7 @@ jobs:
         pip3 install libmapper
         && pip3 install netifaces
         && pip3 install pyinstaller
+        && pip3 install Pillow
     - name: build standalone
       run:
         pyinstaller webmapper.spec
