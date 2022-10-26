@@ -18,8 +18,7 @@ DATA_FILES = [('',['js']),
 OPTIONS = {'argv_emulation': True,
            'iconfile': 'images/libmapper.icns',
            'packages': ['netifaces', 'libmapper'],
-           'frameworks': ['/usr/local/lib/python3.10/site-packages/libmapper/libmapper.dylib',
-                          '/usr/local/lib/python3.10/site-packages/libmapper/liblo.dylib']
+           'frameworks': ['/usr/local/lib/python3.10/site-packages/libmapper/libmapper.dylib']
 }
 
 setup(
