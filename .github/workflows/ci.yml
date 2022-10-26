@@ -41,6 +41,10 @@ jobs:
     - name: build standalone
       run:
         python3 setup.py py2app
+    - name: adjust permissions
+      run:
+        chmod 755 dist/WebMapper.app/Contents/MacOS/WebMapper
+        && chmod 755 dist/WebMapper.app/Contents/MacOS/python
     - uses: actions/upload-artifact@v3
       with:
         name: webmapper-macosx-standalone
