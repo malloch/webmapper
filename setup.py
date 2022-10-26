@@ -17,7 +17,8 @@ DATA_FILES = [('',['js']),
 
 OPTIONS = {'argv_emulation': True,
            'iconfile': 'images/libmapper.icns',
-           'packages': ['netifaces', 'libmapper']
+           'packages': ['netifaces', 'libmapper'],
+           'frameworks': ['libmapper','liblo','zlib']
 }
 
 setup(

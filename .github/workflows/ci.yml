@@ -37,6 +37,7 @@ jobs:
         && pip3 install netifaces
         && pip3 install py2app
         && pip3 list
+        && pip3 show libmapper
     - name: build standalone
       run:
         python3 setup.py py2app
