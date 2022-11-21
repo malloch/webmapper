@@ -697,7 +697,7 @@ class SignalTable {
                                 line += "<td class='"+sigRowType+" filler'></td>";
                             line += "<td";
                             if (leaf) {
-                                line += " class='leaf "+sigRowType+"'";
+                                line += " draggable=True class='leaf "+sigRowType+"'";
                                 line += " id='"+b.leaf.id+"'";
                                 if (depth < max_depth)
                                     line += " colspan="+(max_depth-depth);
@@ -852,6 +852,13 @@ class SignalTable {
                 if (_self.resizeHandler)
                     _self.resizeHandler();
             }
+        });
+
+        $('.leaf')
+            .bind('dragstart', function(ev) {
+                var dt = ev.originalEvent.dataTransfer;
+                dt.setData("Text", "libmapper://signal " + ev.target.id);
+                return true;
         });
 
         this.setSigPositions();
