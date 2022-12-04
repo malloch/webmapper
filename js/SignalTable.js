@@ -857,7 +857,23 @@ class SignalTable {
         $('.leaf')
             .bind('dragstart', function(ev) {
                 var dt = ev.originalEvent.dataTransfer;
+//                dt.setDragImage( $('#chordButton')[0], 15, 15);
+//                var ghost = document.createElement("div");
+//                ghost.append(ev.target.id);
+//                this.style.background = 'green';
+                console.log(this);
+                var foo = this.cloneNode(true);
+//                foo.style.background = 'green';
+                $(foo).addClass("dragGhost");
+                document.getElementsByTagName("body")[0].appendChild(foo);
+                dt.setDragImage(foo, 0, 0);
+                dt.effectAllowed = 'copyLink';
                 dt.setData("Text", "libmapper://signal " + ev.target.id);
+                return true;
+        });
+        $('.leaf')
+            .bind('dragend', function(ev) {
+                $('.dragGhost').remove();
                 return true;
         });
 

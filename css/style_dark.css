@@ -578,6 +578,12 @@ tbody {
     pointer-events: none;
 }
 
+.dragGhost {
+    color: white;
+    background: #222;
+    position: 0,-200;
+}
+
 #table.infoTable {
     border-collapse: collapse;
 }
