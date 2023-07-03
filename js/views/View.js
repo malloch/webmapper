@@ -753,288 +753,208 @@ class View {
 
     setTableDrag() {
         let self = this;
-        var src = null;
-        var dst = null;
-        let prev_svgx;
-        let prev_svgy;
-        let selected_path, selected_len, selected_pos;
+        // dragging from table to table to make maps
+        // the signal associated with the row where the dragging starts becomes the
+        // map's source signal, and if the user releases the drag over any other signal
+        // then it becomes the destination for the map.
+        $('.tableDiv').off('dragstart');
+        $('.tableDiv').on('dragstart', 'td.leaf', function(ev) {
 
-        $('#svgDiv').on('dragenter', function(e) {
-            e.preventDefault();
-            console.log("View::dragenter()");
+            console.log("dragstart", ev.target);
 
-            if (self.graph.draggingFrom == null)
-                return true;
+            if (self.draggingFrom || ev.target.id == 'viewSignalButton')
+                return;
 
-            src = self.graph.draggingFrom;
+            self.escaped = false;
+            let src_row = $(ev.target).parents('tr')[0];
+            let src_table = null;
+            let dst_table = null;
 
-            deselectAllMaps(self.tables);
+            var dt = ev.originalEvent.dataTransfer;
+            var crt = this.cloneNode(true);
+            crt.style.backgroundColor = $(ev.target).parents('tr')[0].style.backgroundColor;
+            crt.style.borderRadius = "20px";
+            crt.style.width = "40px";
+            crt.style.height = "40px";
+            crt.style.color = "transparent";
+            crt.style.position = "absolute";
+            crt.style.top = "-150px";
+            document.body.appendChild(crt);
+            dt.setDragImage(crt, 40, 40);
 
-            self.newMap =
-            {
-                'srcs': [src.sig],
-                'dst': {position: {x: 0, y: 0, vx: 0, vy: 0}},
-                'selected': true
-            };
-            self.newMap.view = new self.mapPainter(self.newMap, self.canvas,
-                                                   self.frame, self.graph);
+            dt.effectAllowed = 'copyLink';
+            dt.setData("Text", "libmapper://signal " + ev.target.id);
 
-            prev_svgx = e.pageX - self.frame.left;
-            prev_svgy = e.pageY - self.frame.top;
+            switch ($(src_row).parents('.tableDiv').attr('id')) {
+                case "leftTable":
+                    src_table = self.tables.left;
+                    break;
+                case "rightTable":
+                    src_table = self.tables.right;
+                    break;
+                default:
+                    console.log('unknown source row');
+                    return;
+            }
 
-            return true;
-        });
-        $('#svgDiv').on('dragover', function(e) {
-            // check if the set draggingFrom variable is set
-            // if so draw potential edge with snapping to tables and maps
-            e.preventDefault();
-            console.log("View::dragover()");
+            $('#svgDiv').one('dragenter.drawing', function(ev) {
 
-            if (self.graph.draggingFrom == null)
-                return true;
+                console.log('dragenter.drawing', ev.target);
 
-            // this should be taken care of by the dragleave handler
-//            if (self.escaped) {
-//                $(document).off('.drawing');
-//                $('svg, .displayTable tbody tr').off('.drawing');
-//                self.draggingFrom = null;
-//                return;
-//            }
+                deselectAllMaps(self.tables);
+                var src = src_table.getRowFromName(src_row.id);
+                var dst = null;
+                self.draggingFrom = self.graph.find_signal(src.id);
 
-            let x = e.pageX;
-            let y = e.pageY;
-            let svgx = x - self.frame.left;
-            let svgy = y - self.frame.top;
+                self.newMap =
+                {
+                    'srcs': [self.draggingFrom],
+                    'dst': {position: {x: 0, y: 0, vx: 0, vy: 0}},
+                    'selected': true
+                };
+                self.newMap.view = new self.mapPainter(self.newMap, self.canvas,
+                                                       self.frame, self.graph);
 
-            if (!self.snapping_to_map || !self._continue_map_snap(svgx, svgy)) {
-                self._unsnap_to_map();
-                let snapped = self._get_map_snap(prev_svgx, prev_svgy, svgx, svgy);
-                if (snapped !== null) {
-                    self._snap_to_map(snapped);
-                }
-                else {
-                    // check table snap
-                    for (let index in self.tables) {
-                        // check if cursor is within snapping range
-                        let snap_factor = 0.05;
-                        dst = self.tables[index].getRowFromPosition(x, y, snap_factor);
-                        if (!dst)
-                            continue;
-                        if (dst.id !== src.id) {
-                            self.newMap.dst = self.graph.find_signal(dst.id);
-                            self.tables[index].highlightRow(dst, false);
+                let prev_svgx = ev.pageX - self.frame.left;
+                let prev_svgy = ev.pageY - self.frame.top;
+                let selected_path, selected_len, selected_pos;
+
+                $('svg, .displayTable tbody td.leaf').on('dragover.drawing', function(ev) {
+
+                    ev.preventDefault();
+
+                    console.log("dragover.drawing");
+
+                    if (self.escaped) {
+                        // clean up
+                        self.tables.left.highlightRow(null, true);
+                        self.tables.right.highlightRow(null, true);
+                        self.draggingFrom = null;
+                        self.pie.hide();
+                        if (self.newMap) {
+                            self.newMap.view.remove();
+                            self.newMap = null;
+                        }
+                        if (self.snapping_to_map()) {
+                            self._unsnap_to_map();
+
+                            // **required so that you can keep making maps afterwards...
+                            self.setTableDrag();
+                        }
+                        $('svg, .displayTable tbody tr').off('dragover.drawing');
+                        return;
+                    }
+
+                    let x = ev.pageX;
+                    let y = ev.pageY;
+                    let svgx = x - self.frame.left;
+                    let svgy = y - self.frame.top;
+
+                    if (svgx == prev_svgx && svgy == prev_svgy)
+                        return;
+
+                    // clear table highlights
+                    let index;
+                    for (index in self.tables)
+                        self.tables[index].highlightRow(null, true);
+
+                    if (!self.snapping_to_map || !self._continue_map_snap(svgx, svgy)) {
+                        self._unsnap_to_map();
+                        let snapped = self._get_map_snap(prev_svgx, prev_svgy, svgx, svgy);
+                        if (snapped !== null) {
+                            self._snap_to_map(snapped);
                         }
                         else {
-                            dst = null;
+                            // check table snap
+                            for (index in self.tables) {
+                                // check if cursor is within snapping range
+                                let snap_factor = 0.05;
+                                dst = self.tables[index].getRowFromPosition(x, y, snap_factor);
+                                if (!dst)
+                                    continue;
+                                if (dst.id !== src.id) {
+                                    self.newMap.dst = self.graph.find_signal(dst.id);
+                                    self.tables[index].highlightRow(dst, false);
+                                }
+                                else {
+                                    dst = null;
+                                }
+                                break;
+                            }
+                            if (!dst) {
+                                self.newMap.dst = {position: {x: svgx, y: svgy, vx: 0, vy: 0}};
+                            }
                         }
-                        break;
                     }
-                    if (!dst) {
-                        self.newMap.dst = {position: {x: svgx, y: svgy, vx: 0, vy: 0}};
+
+                    self.newMap.view.draw(0);
+                    src_table.highlightRow(src, false);
+                    let dx = prev_svgx - svgx; let dy = prev_svgy - svgy;
+                    if (dx * dx + dy * dy > 100) {
+                        prev_svgx = svgx;
+                        prev_svgy = svgy;
                     }
+                });
+                $(document).one('drop.drawing', function(ev) {
+
+                    console.log("drop.drawing", ev.target);
+
+                    function finish(convergent_method) {
+                        if (!self.escaped) {
+                            if (convergent_method !== null && self.snapping_to_map())
+                                mapper.converge(src.id, self.converging, convergent_method);
+                            else if (src && src.id && dst && dst.id)
+                                mapper.map(src.id, dst.id);
+                        }
+                        // clean up
+                        self.tables.left.highlightRow(null, true);
+                        self.tables.right.highlightRow(null, true);
+                        self.draggingFrom = null;
+                        self.pie.hide();
+                        if (self.newMap) {
+                            self.newMap.view.remove();
+                            self.newMap = null;
+                        }
+                        if (self.snapping_to_map()) {
+                            self._unsnap_to_map();
+
+                            // **required so that you can keep making maps afterwards...
+                            self.setTableDrag();
+                        }
+                        $('svg, .displayTable tbody tr').off('dragover.drawing');
+                    }
+                    if (self.snapping_to_map()) {
+                        // switch to pie menu interaction
+                        // **so clicking convergent option doesn't start making new map
+                        $('.tableDiv').off('dragstart');
+
+                        let x = ev.pageX - self.frame.left;
+                        let y = ev.pageY - self.frame.top;
+                        self._start_converging_pie_menu(x, y, finish);
+                    }
+                    else finish();
+                });
+            });
+            $(document).one('drop.drawing', function(e) {
+                $(document).off('.drawing');
+                self.draggingFrom = null;
+            });
+            $(document).one('mouseup.drawing', function(e) {
+                console.log('mouseup!');
+//                $('.tableDiv').off('dragstart');
+                $(document).off('.drawing');
+                self.draggingFrom = null;
+
+                self.tables.left.highlightRow(null, true);
+                self.tables.right.highlightRow(null, true);
+                self.draggingFrom = null;
+                self.pie.hide();
+                if (self.newMap) {
+                    self.newMap.view.remove();
+                    self.newMap = null;
                 }
-            }
-
-            self.newMap.view.draw(0);
-            src.table.highlightRow(src.row, false);
-            let dx = prev_svgx - svgx; let dy = prev_svgy - svgy;
-            if (dx*dx + dy*dy > 100) {
-                prev_svgx = svgx;
-                prev_svgy = svgy;
-            }
+            });
         });
-        $('#svgDiv').on('dragleave', function(e) {
-            // might still need to drag edge if dragging over a table
-            e.preventDefault();
-            console.log("View::dragleave()");
-
-//            self.newMap.view.remove();
-//            self.newMap = null;
-        });
-        $('#svgDiv').on('drop', function(e) {
-            // check is snappingTo variable is set
-            // if so send map command
-            // clear potential edge
-            // clear draggingFrom and snappingTo variables
-
-            e.preventDefault();
-            console.log("View::drop()");
-
-            self.draggingFrom = null;
-            self.newMap.view.remove();
-            self.newMap = null;
-        });
-        $('#svgDiv').on('dragend', function(e) {
-            // check is snappingTo variable is set
-            // if so send map command
-            // clear potential map
-            e.preventDefault();
-            console.log("View::dragend()");
-
-            self.draggingFrom = null;
-            self.newMap.view.remove();
-            self.newMap = null;
-        });
-
-        return;
-//        let self = this;
-//        // dragging from table to table to make maps
-//        // the signal associated with the row where the dragging starts becomes the
-//        // map's source signal, and if the user releases the drag over any other signal
-//        // then it becomes the destination for the map.
-//        $('.tableDiv').off('mousedown');
-//        $('.tableDiv').on('dragstart', 'td.leaf', function(e) {
-//            if (self.draggingFrom)
-//                return;
-//            self.escaped = false;
-//
-//            let src_row = $(this).parent('tr')[0];
-//            let src_table = null;
-//            let dst_table = null;
-//            switch ($(src_row).parents('.tableDiv').attr('id')) {
-//                case "leftTable":
-//                    src_table = self.tables.left;
-//                    break;
-//                case "rightTable":
-//                    src_table = self.tables.right;
-//                    break;
-//                default:
-//                    console.log('unknown source row');
-//                    return;
-//            }
-//
-//            var dt = e.originalEvent.dataTransfer;
-//            dt.effectAllowed = 'copyLink';
-//            dt.setData("text", "libmapper://signal " + e.target.id);
-//
-//            var src = null;
-//            var dst = null;
-//
-//            $('#svgDiv').one('dragover', function(e) {
-//                deselectAllMaps(self.tables);
-//                src = src_table.getRowFromName(src_row.id);
-//                self.draggingFrom = self.graph.find_signal(src.id);
-//
-//                self.newMap =
-//                {
-//                    'srcs': [self.draggingFrom],
-//                    'dst': {position: {x: 0, y: 0, vx: 0, vy: 0}},
-//                    'selected': true
-//                };
-//                self.newMap.view = new self.mapPainter(self.newMap, self.canvas,
-//                                                       self.frame, self.graph);
-//
-//                let prev_svgx = e.pageX - self.frame.left;
-//                let prev_svgy = e.pageY - self.frame.top;
-//                let selected_path, selected_len, selected_pos;
-//
-//                $('svg, .displayTable tbody tr').on('dragover', function(e) {
-//                    // clear table highlights
-//                    let index;
-//                    for (index in self.tables)
-//                        self.tables[index].highlightRow(null, true);
-//
-//                    if (self.escaped) {
-//                        $(document).off('.drawing');
-//                        $('svg, .displayTable tbody tr').off('.drawing');
-//                        self.draggingFrom = null;
-//                        return;
-//                    }
-//
-//                    let x = e.pageX;
-//                    let y = e.pageY;
-//                    let svgx = x - self.frame.left;
-//                    let svgy = y - self.frame.top;
-//
-//                    if (!self.snapping_to_map || !self._continue_map_snap(svgx, svgy)) {
-//                        self._unsnap_to_map();
-//                        let snapped = self._get_map_snap(prev_svgx, prev_svgy, svgx, svgy);
-//                        if (snapped !== null) {
-//                            self._snap_to_map(snapped);
-//                        }
-//                        else {
-//                            // check table snap
-//                            for (index in self.tables) {
-//                                // check if cursor is within snapping range
-//                                let snap_factor = 0.05;
-//                                dst = self.tables[index].getRowFromPosition(x, y, snap_factor);
-//                                if (!dst)
-//                                    continue;
-//                                if (dst.id !== src.id) {
-//                                    self.newMap.dst = self.graph.find_signal(dst.id);
-//                                    self.tables[index].highlightRow(dst, false);
-//                                }
-//                                else {
-//                                    dst = null;
-//                                }
-//                                break;
-//                            }
-//                            if (!dst) {
-//                                self.newMap.dst = {position: {x: svgx, y: svgy, vx: 0, vy: 0}};
-//                            }
-//                        }
-//                    }
-//
-//                    self.newMap.view.draw(0);
-//                    src_table.highlightRow(src, false);
-//                    let dx = prev_svgx - svgx; let dy = prev_svgy - svgy;
-//                    if (dx*dx + dy*dy > 100) {
-//                        prev_svgx = svgx;
-//                        prev_svgy = svgy;
-//                    }
-//                });
-//                $(document).one('mouseup.drawing', function(e) {
-//                    function finish(convergent_method) {
-//                        if (!self.escaped) {
-//                            if (convergent_method !== null && self.snapping_to_map())
-//                                mapper.converge(src.id, self.converging, convergent_method);
-//                            else if (src && src.id && dst && dst.id)
-//                                mapper.map(src.id, dst.id);
-//                        }
-//                        // clean up
-//                        self.tables.left.highlightRow(null, true);
-//                        self.tables.right.highlightRow(null, true);
-//                        self.draggingFrom = null;
-//                        self.pie.hide();
-//                        if (self.newMap) {
-//                            self.newMap.view.remove();
-//                            self.newMap = null;
-//                        }
-//                        if (self.snapping_to_map()) {
-//                            self._unsnap_to_map();
-//
-//                            // **required so that you can keep making maps afterwards...
-//                            self.setTableDrag();
-//                        }
-//                        $('svg, .displayTable tbody tr').off('mousemove.drawing');
-//                    }
-//                    if (self.snapping_to_map()) {
-//                        // switch to pie menu interaction
-//                        // **so clicking convergent option doesn't start making new map
-//                        $('.tableDiv').off('mousedown');
-//
-//                        let x = e.pageX - self.frame.left;
-//                        let y = e.pageY - self.frame.top;
-//                        self._start_converging_pie_menu(x, y, finish);
-//                    }
-//                    else finish();
-//                });
-//            });
-//            $(document).one('mouseup.drawing', function(e) {
-//                $(document).off('.drawing');
-//                self.draggingFrom = null;
-//            });
-//            $('.tableDiv').on('dragend', 'td.leaf', function(e) {
-//                console.log("dragend handler!", src, dst);
-//                if (src !== undefined && dst !== undefined) {
-//                    mapper.map(src.id, dst.id);
-//                }
-//            });
-//            $('.tableDiv').on('dragend', 'td.leaf', function(e) {
-//                console.log("dragend handler!", src, dst);
-//                e.originalEvent.dataTransfer.clearData();
-//            });
-//        });
     }
 
     snapping_to_map()
