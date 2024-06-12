@@ -536,9 +536,7 @@ class SignalTable {
                         break;
                 }
 
-                let typelen = sig.length == 1 ? type : type + '[' + sig.length + ']';
-                let unit = sig.unit == 'unknown' ? '' : ' ('+sig.unit+')';
-                let insts = (sig.num_inst == 'unknown' || sig.num_inst <= 1) ? '' : ' × ' + sig.num_inst;
+                let unit = (sig.unit == 'unknown') || (sig.unit == 'un') ? '' : sig.unit;
 
                 function print_extrema(v, round) {
                     let s = "";
@@ -552,11 +550,11 @@ class SignalTable {
                         }
                         s += "[";
                         if (uniform)
-                            s += (round ? parseFloat(v[0].toFixed(2)) : v[0]) + "]";
+                            s += (round ? parseFloat(v[0]).toFixed(2) : parseFloat(v[0])) + "]";
                         else {
                             let i = 0;
                             while (s.length < 20) {
-                                s += round ? parseFloat(v[i].toFixed(2)) : v[i];
+                                s += round ? parseFloat(v[i]).toFixed(2) : parseFloat(v[i]);
                                 ++i;
                                 if (i >= v.length)
                                     break;
@@ -569,19 +567,11 @@ class SignalTable {
                         }
                     }
                     else if (round)
-                        s += parseFloat(v.toFixed(2));
+                        s += parseFloat(v).toFixed(2);
                     else
                         s += v;
                     return s;
                 };
-
-                let range = "";
-                if (sig.min)
-                    range += print_extrema(sig.min, sig.type != 'INT32') + " ≤ ";
-                if (sig.min || sig.max)
-                    range += "<i>v</i>";
-                if (sig.max)
-                    range += " ≤ " + print_extrema(sig.max, sig.type != 'INT32');
 
                 // alternate metadata presentation
 //                let range = "";
@@ -595,9 +585,12 @@ class SignalTable {
                 sigs.push({
                     id: sig.key,
                     name: sig.name,
-                    insts: insts,
-                    unit: typelen + unit,
-                    range: range,
+                    min: sig.min,
+                    max: sig.max,
+                    type: type,
+                    length: sig.length,
+                    insts: sig.num_inst,
+                    unit: unit,
                     direction: sig.direction,
                     color: Raphael.hsl(dev.hue, 1, 0.5)
                 });
@@ -697,11 +690,33 @@ class SignalTable {
                                 line += "<td class='"+sigRowType+" filler'></td>";
                             line += "<td";
                             if (leaf) {
+                                // Create signal metadata string for tooltip
+                                let metadata = "Name: " + b.leaf.name + "\n";
+                                metadata += "Type: " + b.leaf.type;
+                                let sigLen = "";
+                                if (b.leaf.length > 1) {
+                                    sigLen = " [" + b.leaf.length + "]";
+                                    metadata += sigLen + "\n";
+                                } else {
+                                    metadata += "\n";
+                                }
+                                if (b.leaf.unit != '') {
+                                    metadata += "Unit: " + b.leaf.unit + "\n";
+                                }
+                                metadata += "Minimum: " + b.leaf.min + "\n";
+                                metadata += "Maximum: " + b.leaf.max + "\n";
+                                if (b.leaf.insts > 1) {
+                                    metadata += "Num instances: " + b.leaf.insts + "\n";
+                                }
+
+                                line += " title='"+metadata+"'";
                                 line += " draggable=True class='leaf "+sigRowType+"'";
                                 line += " id='"+b.leaf.id+"'";
                                 if (depth < max_depth)
                                     line += " colspan="+(max_depth-depth);
-                                line += ">"+tds[j][1]+b.leaf.insts+" ("+b.leaf.unit+")<br\>"+b.leaf.range+"</td>";
+                                let viewFloatDir = left ? "left" : "right";
+                                let viewButton = "<img id='viewSignalButton' style='float:"+viewFloatDir+"' src='/images/view_icon_white.png'>";
+                                line += ">"+tds[j][1]+sigLen+viewButton+"</td>";
                                 if (_self.filler && _self.location == "left")
                                     line += "<td class='"+sigRowType+" filler'></td>";
                                 sigRowType = (sigRowType == 'odd') ? 'even' : 'odd';
@@ -719,7 +734,8 @@ class SignalTable {
                                 line += ">"+tds[j][1]+"</td>";
                             }
                         }
-                        target.append("<tr class='"+devRowType+"' style='background: "+color+"44' id="+b.leaf.id+">"+line+"</tr>");
+                        line += "<div id='viewSignalButton' class='viewButton'></div>";
+                        target.append("<tr class='"+devRowType+"' style='background: "+color+"44' id='"+b.leaf.id+"'>"+line+"</tr>");
                         tds = [[b.num_leaves - 1, i]];
                     }
                     add_tree(b, tds, target, depth + 1);
@@ -735,56 +751,58 @@ class SignalTable {
         this.grow();
 
         $(tds).off('click');
-        $(tds).on('dblclick', function(e) {
-            e.stopPropagation();
-            e.preventDefault();
-            _self.viewManager.escape();
+        if (_self.location == "right") {
+            $(tds).on('dblclick', function(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                _self.viewManager.escape();
 
-            let id = $(e.currentTarget)[0].id + '_edit';
-            if (!$("input[id='" + id + "']").length) {
-                $(e.currentTarget).append("<input id="+id+" style='margin-left:10px' placeholder='new value (esc to cancel)'>");
-            }
-            $("#"+$.escapeSelector(id)).on({
-                click: function(e) {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    _self.viewManager.escape();
-                },
-                keydown: function(e) {
-                    e.stopPropagation();
-                    // check enter or escape
-                    switch (e.which) {
-                        case 13:
-                            let signame = e.currentTarget.id;
-                            signame = signame.slice(0, signame.length-5);
-                            let val = $(this).val();
+                let id = $(e.currentTarget)[0].id + '_edit';
+                if ($(e.currentTarget).hasClass('leaf') && !$("input[id='" + id + "']").length) {
+                    $(e.currentTarget).append("<input id="+id+" style='margin-left:10px' placeholder='new value (esc to cancel)'>");
+                }
+                $("#"+$.escapeSelector(id)).on({
+                    click: function(e) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        _self.viewManager.escape();
+                    },
+                    keydown: function(e) {
+                        e.stopPropagation();
+                        // check enter or escape
+                        switch (e.which) {
+                            case 13:
+                                let signame = e.currentTarget.id;
+                                signame = signame.slice(0, signame.length-5);
+                                let val = $(this).val();
 
-                            // remove brackets if any
-                            if (val[0] == '[')
-                                val = val.slice(1)
-                            if (val[val.length-1] == ']')
-                                val = val.slice(0, val.length-1)
+                                // remove brackets if any
+                                if (val[0] == '[')
+                                    val = val.slice(1)
+                                    if (val[val.length-1] == ']')
+                                        val = val.slice(0, val.length-1)
 
-                            // split at commas
-                            val = val.split(",");
+                                        // split at commas
+                                        val = val.split(",");
 
-                            let valid = true;
-                            for (let i in val) {
-                                val[i] = Number(val[i]);
-                                if (isNaN(val[i]))
-                                    valid = false;
-                            }
+                                let valid = true;
+                                for (let i in val) {
+                                    val[i] = Number(val[i]);
+                                    if (isNaN(val[i]))
+                                        valid = false;
+                                }
 
-                            if (valid) {
-                                command.send("set_sig", {name: signame, value: val});
-                            }
-                        case 27:
-                            $(this).remove();
-                            break;
-                    }
-                },
+                                if (valid) {
+                                    command.send("set_sig", {name: signame, value: val});
+                                }
+                            case 27:
+                                $(this).remove();
+                                break;
+                        }
+                    },
+                });
             });
-        });
+        }
         $(tds).on('click', function(e) {
             if ($(e.currentTarget).hasClass('leaf')) {
                 // can't collapse leaves
@@ -852,6 +870,22 @@ class SignalTable {
                 if (_self.resizeHandler)
                     _self.resizeHandler();
             }
+        });
+
+        // View signal clicking
+        $("img[id*='viewSignalButton']").click(function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            _self.viewManager.showSignalMonitor($(this).parent()[0].id);
+        });
+
+        $(tds).hover(function(e) {
+            // Mouse enter
+            $(e.currentTarget).find("#viewSignalButton").show();
+        },
+        function(e) {
+            // Mouse leave
+            $(e.currentTarget).find("#viewSignalButton").hide();
         });
 
         this.setSigPositions();

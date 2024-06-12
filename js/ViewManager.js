@@ -153,6 +153,10 @@ class ViewManager
         this.isCodeMirror = false;
     }
 
+    showSignalMonitor(sigName) {
+        this.signalMonitor = new SignalMonitor(this, sigName);
+    }
+
     _add_graph_callbacks() {
         let self = this;
         this.graph.clear_callbacks();
@@ -190,6 +194,15 @@ class ViewManager
                 case 'map':
                     self._update_maps(obj, event, repaint);
                     break;
+                case 'session':
+                    console.log("got graph sessions callback!");
+                    self._update_sessions();
+                    break;
+            }
+            if (event == 'removed') {
+                // check here if tooltip is visible and has same key as the removed object
+                if (self.tooltip.is_visible && self.tooltip.key == obj.key)
+                    self.tooltip.hide();
             }
         });
     };
@@ -252,6 +265,11 @@ class ViewManager
                     this.views[this.currentView].update('maps');
                 break;
         }
+    }
+
+    _update_sessions() {
+        console.log("ViewManager._update_sessions()");
+        $('#container').trigger("updateSessions");
     }
 
     _selection_handlers() {

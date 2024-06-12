@@ -238,6 +238,7 @@ path {
     background: rgba(220, 220, 220, 0.2);
     text-align: center;
     text-decoration: bold;
+    padding-top: 2px;
     border-top-right-radius: 12px;
     border-top-left-radius: 12px;
 }
@@ -335,7 +336,7 @@ form {
 
 /****************/
 
-#saveButton, #loadButton, #exprButton, #curveTitle, #ifaceMenuLabel, #exprUpdateButton {
+#saveButton, #loadButton, #unloadButton, #exprButton, #curveTitle, #ifaceMenuLabel, #exprUpdateButton {
     cursor: pointer;
 }
 
@@ -405,6 +406,12 @@ form {
     background-image: url(/images/chord_icon_white.png);
 }
 
+#viewSignalButton {
+    width: 20px;
+    height: 20px;
+    display: none;
+}
+
 #consoleButton {
     background-image: url(/images/console_icon_white.png);
 }
@@ -420,6 +427,10 @@ form {
 
 #saveLoadDiv a {
     color: black;
+}
+
+#sessionTitle {
+    font-size: 13px;
 }
 
 .protocol {
@@ -869,7 +880,7 @@ h1, h2, h3, h4, h5, h6 {
 /* Links inside the dropdown */
 .dropdown-content td {
     color: black;
-    padding: 12px 16px;
+    padding: 4px 8px;
     text-decoration: none;
     width: 50%;
 }

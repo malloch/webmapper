@@ -202,7 +202,7 @@ class View {
         filtered = Object.keys(filtered)
                          .sort()
                          .reduce((r, k) => (r[k] = filtered[k], r), {});
-        self.tooltip.showTable(dev.name+" (click to "+action+")", filtered, e.x, e.y);
+        self.tooltip.showTable(dev.key, dev.name+" (click to "+action+")", filtered, e.x, e.y);
     }
 
     setDevHover(dev) {
@@ -253,6 +253,7 @@ class View {
         link.view.hover(
             function(e) {
                 self.tooltip.showTable(
+                    link.key,
                     link.status+" link", {
                         source: link.src.key,
                         destination: link.dst.key
@@ -318,22 +319,9 @@ class View {
             function() {
                 if (!sig.view.label) {
                     // show label
-                    let type;
-                    switch (sig.type) {
-                        case 'i':
-                            type = 'int';
-                            break;
-                        case 'f':
-                            type = 'float';
-                            break;
-                        case 'd':
-                            type = 'double';
-                            break;
-                        default:
-                            type = '?';
-                            break;
-                    }
-                    let typestring = sig.length > 1 ? type+'['+sig.length+']' : type;
+                    let typestring = sig.type.toLowerCase();
+                    if (sig.length > 1)
+                        typestring = typestring + '[' + sig.length + ']';
                     function parseMaybeVector(val) {
                         if (val === null || typeof val === 'undefined')
                             return '';
@@ -347,8 +335,6 @@ class View {
                         }
                         return val;
                     }
-                    let minstring = parseMaybeVector(sig.min);
-                    let maxstring = parseMaybeVector(sig.max);
                     let x, y;
                     if (Array.isArray(sig.position)) {
                        x = sig.position[0].x;
@@ -369,7 +355,7 @@ class View {
                                          .reduce((res, o) => Object.assign(res, o), {});
                     filtered.instances = sig.num_inst;
                     delete filtered.num_inst;
-                    filtered.type = type_name(sig.type);
+                    filtered.type = typestring;
                     let maps = self.graph.maps;
                     filtered.maps =
                         maps.filter(m => sig === m.dst)
@@ -380,34 +366,18 @@ class View {
                        +" out";
                     if (sig.use_inst == true)
                         filtered.instances = sig.instances;
-                    if (sig.min !== undefined) {
-                        if (Array.isArray(sig.min)) {
-                            let v = [];
-                            for (let j in sig.min) {
-                                v[j] = sig.min[j].toFixed(3);
-                                console.log("v["+j+"] = "+v[j]+" ("+typeof(v[j])+")");
-                            }
-                            filtered.min = v;
-                        }
-                        else
-                            filtered.min = sig.min.toFixed(3);
-                    }
-                    if (sig.max !== undefined) {
-                        if (Array.isArray(sig.max)) {
-                            let v = [];
-                            for (let j in sig.max)
-                                v[j] = sig.max[j].toFixed(3);
-                        }
-                        else
-                            filtered.max = sig.max.toFixed(3);
-                    }
+                    filtered.min = parseMaybeVector(sig.min);
+                    filtered.max = parseMaybeVector(sig.max);
+                    filtered.direction = filtered.direction.toLowerCase();
                     filtered.period = sig.period.toFixed(4) * 1000 + " ms";
                     filtered.jitter = (sig.jitter * 1000).toFixed(3) + " ms";
+                    filtered.stealing = filtered.steal.toLowerCase();
+                    delete filtered.steal;
                     // sort
                     filtered = Object.keys(filtered)
                                      .sort()
                                      .reduce((r, k) => (r[k] = filtered[k], r), {});
-                    self.tooltip.showTable(sig.name, filtered, x, y);
+                    self.tooltip.showTable(sig.key, sig.device.name+":"+sig.name, filtered, x, y);
                     sig.view.animate({'stroke-width': 15}, 0, 'linear');
                 }
                 self.hoverDev = sig.device;
@@ -536,6 +506,7 @@ class View {
                     self.setSigHover(sig);
                 }
                 sig.view.show();
+                sig.hidden = false;
             });
         });
     }
@@ -576,6 +547,7 @@ class View {
             function(e) {
                 if (!self.draggingFrom) {
                     self.tooltip.showTable(
+                        map.key,
                         "Map", {
                             source: map.srcs.map(s => s.key).join(', '),
                             destination: map.dst.key,

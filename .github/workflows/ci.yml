@@ -6,78 +6,59 @@ jobs:
   Linux:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
     - name: install dependencies
       run:
-        pip3 install libmapper
+        pip3 install mappersession
         && pip3 install netifaces
         && pip3 install pyinstaller
     - name: build standalone
       run:
         pyinstaller webmapper.spec
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: webmapper-ubuntu-standalone
         path: dist/webmapper
 
-  MacOS-Latest:
-    runs-on: macOS-latest
+  MacOS:
+    runs-on: macOS-13
     env:
       CC: clang
       CXX: clang++
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
     - name: install dependencies
       run:
-        pip3 install libmapper
+        pip3 install mappersession
         && pip3 install netifaces
         && pip3 install pyinstaller
     - name: build standalone
       run:
         pyinstaller webmapper.spec
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: webmapper-macosx-standalone
-        path: dist/webmapper
-
-  MacOS-10:
-    runs-on: macOS-10.15
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-    - name: install dependencies
-      run:
-        pip3 install libmapper
-        && pip3 install netifaces
-        && pip3 install pyinstaller
-    - name: build standalone
-      run:
-        pyinstaller webmapper.spec
-    - uses: actions/upload-artifact@v3
-      with:
-        name: webmapper-macosx-10-standalone
         path: dist/webmapper
 
   Windows-Latest:
     runs-on: windows-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
     - name: install dependencies
       run:
-        pip3 install libmapper
+        pip3 install mappersession
         && pip3 install netifaces
         && pip3 install pyinstaller
     - name: build standalone
       run:
         pyinstaller webmapper.spec
-    - uses: actions/upload-artifact@v3
+    - uses: actions/upload-artifact@v4
       with:
         name: webmapper-win64-standalone
         path: dist/webmapper

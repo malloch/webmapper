@@ -107,7 +107,7 @@ class ConsoleView extends View {
                         break;
                     case 'ephemeral':
                     case 'use_inst':
-                        v = sig[key] == 'true' ? 'T' : 'F';
+                        v = sig[key] == true ? 'T' : 'F';
                         s += " "+key+": "+v+";";
                         break;
                     case 'min':
@@ -116,16 +116,18 @@ class ConsoleView extends View {
                         v = sig[key];
                         if (Array.isArray(v)) {
                             s += "[";
-                            for (let j in v)
-                                v[j] = v[j].toFixed(3);
+                            if (sig.type != 'INT32') {
+                                for (let j in v)
+                                    v[j] = parseFloat(v[j]).toFixed(3);
+                            }
                             s += v+"];";
                         }
                         else
-                            s += v.toFixed(3)+";";
+                            s += Number.parseFloat(v).toFixed(3)+";";
                         break;
                     case 'period':
                     case 'jitter':
-                        s += " "+key+": "+sig[key].toFixed(3)*1000+"ms;";
+                        s += " "+key+": "+Number.parseFloat(sig[key]).toFixed(3)*1000+"ms;";
                         break;
                     case 'num_instances':
                         if (sig['use_inst'] == false)
@@ -157,7 +159,7 @@ class ConsoleView extends View {
                         break;
                     case 'muted':
                     case 'use_inst':
-                        v = map[key] == 'true' ? 'T' : 'F';
+                        v = map[key] == true ? 'T' : 'F';
                         s2 += " "+key+": "+v+";";
                         break;
                     default:
@@ -240,7 +242,7 @@ class ConsoleView extends View {
                                         let t = sigCount > 0 ? "├─ " : "└─ ";
                                         let s = ' [[;'+color+';]   '+t+sig.name+']';
                                         s += ' ('+(sig['direction']=='output'?'out, ':'in, ');
-                                        s += sig['type']+sig['length']+')';
+                                        s += sig['type']+'['+sig['length']+'])';
                                         echo(s);
                                         if (showDetail) {
                                             s = sigCount > 0 ? '    [[;'+color+';]|] ' : '      ';
@@ -283,7 +285,7 @@ class ConsoleView extends View {
                                         s += '[[;white;],]';
                                 }
                                 if (len > 1)
-                                    s += '[[;white;]\\]';
+                                    s += '[[;white;]\\]]';
                                 s += ' [[;white;]->] ';
                                 color = Raphael.hsl(map.dst.device.hue, 1, 0.5);
                                 s += '[[;'+color+';]'+map.dst.device.name+'/'+map.dst.name+']';
