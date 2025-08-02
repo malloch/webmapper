@@ -592,7 +592,8 @@ class SignalTable {
                     insts: sig.num_inst,
                     unit: unit,
                     direction: sig.direction,
-                    color: Raphael.hsl(sig.hue ? sig.hue : dev.hue, 1, 0.5)
+                    color: Raphael.hsl(sig.hue ? sig.hue : dev.hue, 1, 0.5),
+                    dev_color: Raphael.hsl(dev.hue, 1, 0.5)
                 });
 
                 num_dev_sigs += 1;
@@ -716,6 +717,7 @@ class SignalTable {
                                     line += " colspan="+(max_depth-depth);
                                 let viewFloatDir = left ? "left" : "right";
                                 let viewButton = "<img id='viewSignalButton' style='float:"+viewFloatDir+"' src='/images/view_icon_white.png'>";
+                                line += " style='background: "+b.leaf.color+"44'";
                                 line += ">"+tds[j][1]+sigLen+viewButton+"</td>";
                                 if (_self.filler && _self.location == "left")
                                     line += "<td class='"+sigRowType+" filler'></td>";
@@ -729,13 +731,21 @@ class SignalTable {
                                     id = tokens.slice(0, tokens.length-idx).join('/');
                                 line += " id='"+id+"'";
                                 line += " rowspan="+tds[j][0];
+                                if (tds[j][0] > 1) {
+                                    // use device color if rowspan > 1
+                                    line += " style='background: "+b.leaf.dev_color+"44'";
+                                }
+                                else {
+                                    // use leaf color
+                                    line += " style='background: "+b.leaf.color+"44'";
+                                }
                                 if (id.indexOf('/') == -1)
                                     line += " class=device";
                                 line += ">"+tds[j][1]+"</td>";
                             }
                         }
                         line += "<div id='viewSignalButton' class='viewButton'></div>";
-                        target.append("<tr class='"+devRowType+"' style='background: "+color+"44' id='"+b.leaf.id+"'>"+line+"</tr>");
+                        target.append("<tr class='"+devRowType+"' id='"+b.leaf.id+"'>"+line+"</tr>");
                         tds = [[b.num_leaves - 1, i]];
                     }
                     add_tree(b, tds, target, depth + 1);

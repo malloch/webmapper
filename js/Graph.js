@@ -95,7 +95,7 @@ NodeArray.prototype = {
         if ('color.rgb' in obj && 3 == obj['color.rgb'].length) {
             let rgb = obj['color.rgb'];
             let hsl = Raphael.rgb2hsl({r:rgb[0], g:rgb[1], b:rgb[2]});
-            obj.hue = hsl.h;
+            obj.hue = hsl.h > 0 ? hsl.h : 0.001;
         }
         else if ('color.hue' in obj) {
             let hue = obj['color.hue'];
