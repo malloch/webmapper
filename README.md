@@ -44,7 +44,7 @@ If the browser doesn't open, open it manually and type "localhost:#####" into th
 The network interface can be specified using a command-line argument when launching webmapper:
 
 ~~~
-python webmapper.py --iface lo0
+python3 webmapper.py --iface lo0
 ~~~
 
 ### Running without a local front end
@@ -52,13 +52,13 @@ python webmapper.py --iface lo0
 By default webmapper will open a browser window when it is launched, but there may be situations for which this is not the correct behaviour, such as running the webmapper back-end on a computer without a display and running the front-end remotely. The flag `--no-browser` will prevent webmapper from trying to open a browser window locally. The flag `--stay-alive` keeps webmapper runnning after a connected front-end disconnects.
 
 ~~~
-python webmapper.py --no-browser --stay-alive
+python3 webmapper.py --no-browser --stay-alive
 ~~~
 
 ## To build a standalone application for macOS:
 
 ~~~
-python setup.py py2app
+python3 setup.py py2app
 ~~~
 
 ---
