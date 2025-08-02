@@ -86,10 +86,6 @@ monitor_sig = webmapper_dev.add_signal(mpr.Signal.Direction.INCOMING, "monitor",
                                        None, -100000, 100000, None, monitor_handler)
 monitor_sig['display'] = False
 
-if '--iface' in sys.argv:
-    iface = sys.argv[sys.argv.index('--iface')+1]
-    graph.set_interface(iface)
-
 def dev_props(dev):
     props = dev.properties.copy()
     if 'synced' in props:
@@ -521,6 +517,10 @@ server.add_command_handler("get_interfaces", get_interfaces)
 
 get_interfaces(False)
 
+if '--iface' in sys.argv:
+    iface = sys.argv[sys.argv.index('--iface')+1]
+    graph.set_interface(iface)
+
 try:
     port = int(sys.argv[sys.argv.index('--port'):][1])
 except:
@@ -530,6 +530,10 @@ except:
 on_open = lambda: ()
 if not '--no-browser' in sys.argv and not '-n' in sys.argv:
     on_open = lambda: open_gui(port)
+
+if '--load' in sys.argv:
+    file = sys.argv[sys.argv.index('--load')+1]
+    session.load(file, wait=10, graph=graph)
 
 server.serve(port=port, poll=poll_and_push, on_open=on_open,
              quit_on_disconnect=not '--stay-alive' in sys.argv)
