@@ -233,35 +233,54 @@ function initViewCommands()
                 new_view = 'console';
                 break;
             case 79:
+                /* O */
                 e.preventDefault();
                 saverLoader.fileOpenDialog();
                 break;
             case 83:
+                /* S */
                 e.preventDefault();
                 saverLoader.save();
             case 48:
+                /* 0 */
                 e.preventDefault();
                 viewManager.resetPanZoom();
                 break;
             case 187:
+                /* - */
                 // decrease zoom
                 e.preventDefault();
                 mp = viewManager.view.mapPane;
                 viewManager.zoom(mp.cx, mp.cy, -10);
                 break;
             case 189:
+                /* + */
                 // increase zoom
                 e.preventDefault();
                 mp = viewManager.view.mapPane;
                 viewManager.zoom(mp.cx, mp.cy, 10);
                 break;
             case 70:
+                /* F */
                 // "find": focus on signal filter
                 e.preventDefault();
                 sigFilter.activate();
                 break;
+            case 90:
+                /* Z */
+                // undo stub
+                // check if shift key down, route to redo on macOS
+                console.log('undo');
+                command.send('undo');
+                break;
+            case 89:
+                /* Y */
+                // redo stub
+                console.log('redo');
+                command.send('redo');
+                break;
             default:
-//                console.log('key:', e.which);
+                console.log('unhandled keystroke:', e.which);
         }
         if (new_view) {
             viewManager.switch_view(new_view);
