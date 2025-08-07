@@ -79,11 +79,12 @@ graph = mpr.Graph()
 webmapper_dev = mpr.Device("webmapper", graph)
 webmapper_dev['display'] = False
 
-def monitor_handler(sig, event, id, val, timetag):
-    server.send_command("update_sig_monitor", val)
+def monitor_handler(sig, event, id):
+    server.send_command("update_sig_monitor", sig.get_value())
 
 monitor_sig = webmapper_dev.add_signal(mpr.Signal.Direction.INCOMING, "monitor", 1, mpr.Type.FLOAT,
-                                       None, -100000, 100000, None, monitor_handler)
+                                       None, -100000, 100000, None)
+monitor_sig.add_callback(monitor_handler, mpr.Object.Status.UPDATE_REM)
 monitor_sig['display'] = False
 
 def dev_props(dev):
@@ -166,36 +167,45 @@ def map_props(map):
 #    print("map_props", props)
     return props
 
-def on_device(type, dev, event):
+def on_device(dev, event):
 #    print('ON_DEVICE:', event, dev)
     if dev['is_local']:
         return
     dev = dev_props(dev)
-    if event == mpr.Graph.Event.NEW or event == mpr.Graph.Event.MODIFIED:
+    if event == mpr.Object.Status.NEW or event == mpr.Object.Status.MODIFIED:
         new_devs[dev['key']] = dev
-    elif event == mpr.Graph.Event.REMOVED or event == mpr.Graph.Event.EXPIRED:
+    elif event == mpr.Object.Status.REMOVED or event == mpr.Object.Status.EXPIRED:
         # TODO: just send keys instead or entire object
         del_devs[dev['key']] = dev
 
-def on_signal(type, sig, event):
+def on_signal(sig, event):
 #    print('ON_SIGNAL:', event)
     if sig['is_local']:
         return
     sig = sig_props(sig)
-    if event == mpr.Graph.Event.NEW or event == mpr.Graph.Event.MODIFIED:
+    if event == mpr.Object.Status.NEW or event == mpr.Object.Status.MODIFIED:
         new_sigs[sig['key']] = sig
-    elif event == mpr.Graph.Event.REMOVED:
+    elif event == mpr.Object.Status.REMOVED:
         del_sigs[sig['key']] = sig
 
-def on_map(type, map, event):
+def on_map(map, event):
 #    print('ON_MAP:', event, type, map)
     if map['is_local']:
         return
     map = map_props(map)
-    if event == mpr.Graph.Event.NEW or event == mpr.Graph.Event.MODIFIED:
+    if event == mpr.Object.Status.NEW or event == mpr.Object.Status.MODIFIED:
         new_maps[map['key']] = map
-    elif event == mpr.Graph.Event.REMOVED:
+    elif event == mpr.Object.Status.REMOVED:
         del_maps[map['key']] = map
+
+def on_object(obj, event, id):
+    type = obj.type()
+    if type is mpr.Type.DEVICE:
+        on_device(obj, event)
+    elif type is mpr.Type.SIGNAL:
+        on_signal(obj, event)
+    elif type is mpr.Type.MAP:
+        on_map(obj, event)
 
 def find_sig(fullname):
     names = fullname.split('/', 1)
@@ -221,10 +231,10 @@ def find_map(srckeys, dstkey):
         intersect = intersect.intersect(s.maps())
     for m in intersect:
         match = True
-        match = match and (m.index(dst) >= 0)
+        match = match and (m.index(dst, mpr.Map.Location.DESTINATION) >= 0)
         if match:
             for s in srcs:
-                match = match and (m.index(s) >= 0)
+                match = match and (m.index(s, mpr.Map.Location.SOURCE) >= 0)
         if match:
             return m
     return None
@@ -394,14 +404,11 @@ def init_graph(arg):
     global graph
 
     # remove old callbacks (if they are registered)
-    graph.remove_callback(on_device)
-    graph.remove_callback(on_signal)
-    graph.remove_callback(on_map)
+    graph.remove_callback()
 
     # register callbacks
-    graph.add_callback(on_device, mpr.Type.DEVICE)
-    graph.add_callback(on_signal, mpr.Type.SIGNAL)
-    graph.add_callback(on_map, mpr.Type.MAP)
+    graph.add_callback(on_object, (  mpr.Object.Status.NEW | mpr.Object.Status.MODIFIED
+                                   | mpr.Object.Status.REMOVED | mpr.Object.Status.EXPIRED))
 
     # (re)subscribe: currently this does nothing but could refresh graph database?
     graph.subscribe(None, mpr.Type.OBJECT, -1)
