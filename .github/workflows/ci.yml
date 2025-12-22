@@ -23,7 +23,7 @@ jobs:
         path: dist/webmapper
 
   MacOS:
-    runs-on: macOS-13
+    runs-on: macOS-14
     env:
       CC: clang
       CXX: clang++
