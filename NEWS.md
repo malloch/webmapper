@@ -1,5 +1,18 @@
 # WebMapper News
 
+## Version 2.5.1
+
+We are pleased to announce the release of version 2.5.1 of WebMapper, a Python + HTML5 user interface for exploring and managing the distributed network formed by [libmapper](http://www.libmapper.org/)-enabled software and hardware.
+
+Changes since the last release:
+
+- updates for libmapper/Python API changes.
+- added `--load` argument when launching.
+- enabled specifying signal color in table views.
+- fixed message filtering bug introduced in `2a17a66`
+
+This version updates the package dependency requirements to [libmapper 2.5.1](https://pypi.org/project/libmapper/2.5.1/) and [mappersession 0.0.16](https://pypi.org/project/mappersession/0.0.16/).
+
 ## Version 2.4.12
 
 We are pleased to announce the release of version 2.4.12 of WebMapper, a Python + HTML5 user interface for exploring and managing the distributed network formed by [libmapper](http://www.libmapper.org/)-enabled software and hardware.
