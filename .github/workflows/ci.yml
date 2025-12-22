@@ -33,7 +33,9 @@ jobs:
         fetch-depth: 0
     - name: install dependencies
       run:
-        pip3 install mappersession
+        python3 -m venv venv
+        && source venv/bin/activate
+        && pip3 install mappersession
         && pip3 install netifaces
         && pip3 install pyinstaller
     - name: build standalone
