@@ -221,10 +221,10 @@ def find_map(srckeys, dstkey):
         intersect = intersect.intersect(s.maps())
     for m in intersect:
         match = True
-        match = match and (m.index(dst) >= 0)
+        match = match and (m.index(dst, mpr.Location.DESTINATION) >= 0)
         if match:
             for s in srcs:
-                match = match and (m.index(s) >= 0)
+                match = match and (m.index(s, mpr.Location.SOURCE) >= 0)
         if match:
             return m
     return None
