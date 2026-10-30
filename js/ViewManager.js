@@ -390,6 +390,7 @@ class ViewManager
                         $('#curveEditorWindow').remove();
                     }
                     self.views[self.currentView].escape();
+                    deselectAllMaps(self.tables);
                     break;
             }
         });
